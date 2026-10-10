@@ -177,10 +177,18 @@ export const data = {
             };
             await client.setAntinukeData(guild.id, newConfig);
 
+            let rolePositionWarning = '';
             try {
                 const highestBotRolePos = me.roles?.highest?.position ?? 0;
+                const serverHighestPos = guild.roles.highest?.position ?? 0;
                 if (highestBotRolePos > 1 && protectRole.position < highestBotRolePos - 1) {
-                    await protectRole.setPosition(highestBotRolePos - 1).catch(() => null);
+                    const moved = await protectRole.setPosition(highestBotRolePos - 1).catch(() => null);
+                    if (!moved) {
+                        rolePositionWarning = `\n\n${emojis.warn} **Role Hierarchy Warning**: Could not automatically move <@&${protectRole.id}> near the top. Please drag it manually below my highest role.`;
+                    }
+                }
+                if (highestBotRolePos < serverHighestPos - 1) {
+                    rolePositionWarning += `\n\n${emojis.warn} **Hierarchy Notice**: My highest role (<@&${me.roles.highest.id}>) is currently below other roles in this server. Move my role to the very top of Server Settings → Roles so I can punish any attacker.`;
                 }
             } catch (roleError) { }
 
@@ -195,7 +203,7 @@ export const data = {
             await interaction.editReply({ embeds: [setupEmbed] }).catch(() => null);
 
             // Security Audit: Check un-whitelisted bots for warning notice without proactively stripping roles
-            let warningText = '';
+            let warningText = rolePositionWarning;
             try {
                 const unwhitelistedBots = guild.members.cache.filter(m =>
                     m.user.bot &&
@@ -301,17 +309,23 @@ export const data = {
                 } catch (e) { }
             }
 
-            await client.deleteAntinukeData(guild.id);
+            // Preserve whitelists, extraOwners, logsChannel, punishment, and disabledEvents while turning off protection
+            await client.setAntinukeData(guild.id, {
+                ...antinukeData,
+                enabled: false,
+                protectRole: null
+            });
 
             await delay(1200);
 
             // Final Frame: Complete System Shutdown!
             disableEmbed.setDescription(
                 `${emojis.tick} **Complete System Shutdown!**\n\n`
-                + `__**${emojis.warn} All Protection Removed**__\n`
+                + `__**${emojis.warn} Protection Disabled**__\n`
                 + `> ${emojis.arrow} **Status:** \`Disabled\` ${emojis.cross}\n`
-                + `> ${emojis.arrow} **Role:** ${roleDeleted ? '`Deleted`' : '`Not found`'}\n\n`
-                + `-# Use \`/antinuke enable\` to set up a new protection system.`
+                + `> ${emojis.arrow} **Role:** ${roleDeleted ? '`Deleted`' : '`Not found`'}\n`
+                + `> ${emojis.arrow} **Saved Settings:** \`Whitelists & Owners Preserved\` ${emojis.tick}\n\n`
+                + `-# Use \`/antinuke enable\` to re-activate protection with your saved settings.`
             );
             disableEmbed.setColor(client.color);
 
@@ -1010,13 +1024,13 @@ export const data = {
             return;
         } else if (subcommandGroup === 'punishment') {
             if (!antinukeData?.enabled) {
-                return message.reply({
+                return interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setDescription(`${emojis.warn} **Antinuke is not enabled in this server**`)
                             .setColor(client.color)
                     ]
-                })
+                });
             }
 
             switch (subcommand) {
@@ -1038,12 +1052,9 @@ export const data = {
                         .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
                         .setTitle('Antinuke Action Configuration')
                         .setDescription(`${emojis.antinuke} **Choose the action that should be enforced when a security event is detected.**\n\n-# **Note:- Move my "Roynix Protect" role to the top of all roles for the best performance**`)
-                        .setThumbnail(guild.iconURL({ size: 1024 }))
+                        .setThumbnail(guild.iconURL({ size: 1024 }));
 
-
-
-                    const sentMessage = await interaction.reply({ embeds: [embed], components: [row] });
-
+                    const sentMessage = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
 
                     const collector = sentMessage.createMessageComponentCollector({ time: 60000 });
                     let selectedAction;
@@ -1052,24 +1063,13 @@ export const data = {
                         if (i.user.id !== interaction.user.id) {
                             return i.reply({ content: 'You cannot interact with this.', flags: MessageFlags.Ephemeral });
                         }
-                        const { customId, values, guild } = i;
+                        const { customId, values, guild: iGuild } = i;
 
                         if (customId === 'select_action') {
                             selectedAction = values[0];
 
                             try {
-                                await sentMessage.edit({
-                                    embeds: [
-                                        new EmbedBuilder()
-                                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
-                                            .setDescription(`${emojis.loading} **Configuring the antinuke punishment**`)
-                                            .setColor(client.color)
-                                    ],
-                                    flags: MessageFlags.Ephemeral,
-                                    components: []
-                                })
-
-                                await client.antinukeDB.set(`antinukeData_${guild.id}.punishment`, selectedAction);
+                                await client.antinukeDB.set(`antinukeData_${iGuild.id}.punishment`, selectedAction);
 
                                 await i.update({
                                     embeds: [
@@ -1078,8 +1078,7 @@ export const data = {
                                             .setColor(client.color)
                                             .setDescription(`${emojis.tick} Antinuke action has been set to **${selectedAction}**`)
                                     ],
-                                    components: [],
-                                    flags: MessageFlags.Ephemeral
+                                    components: []
                                 });
 
                                 collector.stop();
@@ -1088,24 +1087,24 @@ export const data = {
                                 await i.followUp({
                                     content: `${emojis.cross} **An error occurred while setting the antinuke action.**`,
                                     flags: MessageFlags.Ephemeral
-                                });
+                                }).catch(() => null);
                             }
                         }
                     });
 
-
                     collector.on('end', async () => {
                         if (!selectedAction) {
-                            await sentMessage.edit({
+                            await interaction.editReply({
                                 embeds: [
                                     new EmbedBuilder()
                                         .setColor(client.color)
                                         .setDescription(`${emojis.warn} **Antinuke action setup timed out.**`)
-                                ], components: []
-                            });
+                                ],
+                                components: []
+                            }).catch(() => null);
                         }
                     });
-                    return
+                    return;
                 }
 
                 case 'show': {

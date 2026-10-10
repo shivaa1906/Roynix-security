@@ -145,10 +145,18 @@ export const data = {
                 }
                 await client.setAntinukeData(guild.id, newConfig)
 
+                let rolePositionWarning = '';
                 try {
                     const highestBotRolePos = me.roles?.highest?.position ?? 0
+                    const serverHighestPos = guild.roles.highest?.position ?? 0
                     if (highestBotRolePos > 1 && protectRole.position < highestBotRolePos - 1) {
-                        await protectRole.setPosition(highestBotRolePos - 1).catch(() => null)
+                        const moved = await protectRole.setPosition(highestBotRolePos - 1).catch(() => null)
+                        if (!moved) {
+                            rolePositionWarning = `\n\n${emojis.warn} **Role Hierarchy Warning**: Could not automatically move <@&${protectRole.id}> near the top. Please drag it manually below my highest role.`
+                        }
+                    }
+                    if (highestBotRolePos < serverHighestPos - 1) {
+                        rolePositionWarning += `\n\n${emojis.warn} **Hierarchy Notice**: My highest role (<@&${me.roles.highest.id}>) is currently below other roles in this server. Move my role to the very top of Server Settings → Roles so I can punish any attacker.`
                     }
                 } catch (roleError) {
                 }
@@ -165,7 +173,7 @@ export const data = {
                 await msg.edit({ embeds: [setupEmbed] }).catch(() => null)
 
                 // Security Audit: Check un-whitelisted bots for warning notice without proactively stripping roles
-                let warningText = '';
+                let warningText = rolePositionWarning;
                 try {
                     const unwhitelistedBots = guild.members.cache.filter(m =>
                         m.user.bot &&
@@ -316,17 +324,23 @@ export const data = {
                     }
                 }
 
-                await client.deleteAntinukeData(guild.id)
+                // Preserve whitelists, extraOwners, logsChannel, punishment, and disabledEvents while turning off protection
+                await client.setAntinukeData(guild.id, {
+                    ...antinukeData,
+                    enabled: false,
+                    protectRole: null
+                })
 
                 await new Promise(resolve => setTimeout(resolve, 1200))
 
                 // Final Frame: Complete System Shutdown!
                 disableEmbed.setDescription(
                     `${emojis.tick} **Complete System Shutdown!**\n\n`
-                    + `__**${emojis.warn} All Protection Removed**__\n`
+                    + `__**${emojis.warn} Protection Disabled**__\n`
                     + `> ${emojis.arrow} **Status:** \`Disabled\` ${emojis.cross}\n`
-                    + `> ${emojis.arrow} **Role:** ${roleDeleted ? '`Deleted`' : '`Not found`'}\n\n`
-                    + `-# Use \`antinuke enable\` to set up a new protection system.`
+                    + `> ${emojis.arrow} **Role:** ${roleDeleted ? '`Deleted`' : '`Not found`'}\n`
+                    + `> ${emojis.arrow} **Saved Settings:** \`Whitelists & Owners Preserved\` ${emojis.tick}\n\n`
+                    + `-# Use \`antinuke enable\` to re-activate protection with your saved settings.`
                 )
                 disableEmbed.setColor(client.color)
 
