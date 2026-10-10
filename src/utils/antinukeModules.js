@@ -1,6 +1,7 @@
 import emojis from '../config/emojis.js';
 
 export const antinukeModules = [
+    // --- 24 Core AntiNuke Modules (Legacy Backwards-Compatible) ---
     { name: 'Anti Bot', key: 'antiBot', aliases: ['bot', 'antibot'], description: 'Prevents unauthorized bots from being added' },
     { name: 'Anti Ban', key: 'antiBan', aliases: ['ban', 'antiban'], description: 'Prevents unauthorized member bans' },
     { name: 'Anti Kick', key: 'antiKick', aliases: ['kick', 'antikick'], description: 'Prevents unauthorized member kicks' },
@@ -24,7 +25,22 @@ export const antinukeModules = [
     { name: 'Anti Ping', key: 'antiPing', aliases: ['ping', 'antiping', 'everyone', 'here'], description: 'Prevents unauthorized mass mentions' },
     { name: 'Auto Recovery', key: 'autoRecovery', aliases: ['recovery', 'autorecovery', 'restore'], description: 'Automatically restores deleted/modified channels & roles' },
     { name: 'Zero-Trust Quarantine', key: 'zeroTrustQuarantine', aliases: ['zerotrust', 'quarantine', 'zt'], description: 'Automatically revokes administrative permissions from unwhitelisted bots' },
-    { name: 'Circuit Breaker', key: 'circuitBreaker', aliases: ['circuit', 'breaker', 'lockdown'], description: 'Automated emergency server lockdown and multi-bot quarantine during raid bursts' }
+    { name: 'Circuit Breaker', key: 'circuitBreaker', aliases: ['circuit', 'breaker', 'lockdown'], description: 'Automated emergency server lockdown and multi-bot quarantine during raid bursts' },
+
+    // --- Newly Integrated Advanced Modules ---
+    { name: 'Channel Overwrite Protection', key: 'channelOverwriteProtection', aliases: ['overwrites', 'overwrite', 'cop'], description: 'Detects and reverts unauthorized dangerous permission overwrite additions' },
+    { name: 'Role Position Protection', key: 'rolePositionProtection', aliases: ['roleposition', 'rolehierarchy', 'rpp'], description: 'Detects and reverts unauthorized role elevation and hierarchy tampering' },
+    { name: 'Permission Escalation', key: 'permissionEscalation', aliases: ['permescalation', 'escalation', 'pe'], description: 'Reverts unauthorized administrative permission grants to roles' },
+    { name: 'Invite Creation Protection', key: 'inviteProtection', aliases: ['invitecreate', 'antiinvite', 'invites'], description: 'Instantly deletes invites created by untrusted users' },
+    { name: 'AutoMod Protection', key: 'automodProtection', aliases: ['automod', 'antiautomod'], description: 'Protects Discord AutoMod rules from unauthorized deletion or disabling' },
+    { name: 'Integration Protection', key: 'integrationProtection', aliases: ['integration', 'integrations'], description: 'Monitors and protects guild integrations and external app connections' },
+    { name: 'Join Raid Protection', key: 'joinRaid', aliases: ['joinraid', 'antiraid', 'raidjoin'], description: 'Tracks join burst velocity and trips emergency lockdown on join waves' },
+    { name: 'Timeout Protection', key: 'timeoutProtection', aliases: ['timeout', 'antitimeout'], description: 'Reverts unauthorized member timeouts applied to staff and members' },
+    { name: 'Phishing Filter', key: 'phishingDetector', aliases: ['phishing', 'antiphish', 'scamlinks'], description: 'Detects and deletes known phishing domains and typo-squatted variations' },
+    { name: 'Scam Pattern Filter', key: 'scamPatterns', aliases: ['scampatterns', 'fakenitro', 'scam'], description: 'Blocks fake Nitro, Steam gift, and token-grabber lure patterns' },
+    { name: 'Attachment Screening', key: 'attachmentScreening', aliases: ['attachments', 'antivirus', 'executables'], description: 'Blocks executable and script files (.exe, .bat, .vbs, .sh, .py)' },
+    { name: 'Anti-Spam Rate Limiter', key: 'antiSpam', aliases: ['antispam', 'ratelimit', 'spam'], description: 'Per-user message rate limiter preventing rapid copy-paste spam' },
+    { name: 'Voice Security', key: 'voiceSecurity', aliases: ['voicesecurity', 'voicehopping', 'voice'], description: 'Detects rapid voice hopping, channel flooding, and moderator move abuse' }
 ];
 
 /**

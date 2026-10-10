@@ -15,6 +15,7 @@ import { decodeSnowflakeTimestamp } from '../utils/getExecutor.js';
 import { punishExecutor } from '../utils/punishExecutor.js';
 import { deleteUnauthorizedWebhook } from '../antinuke/antiWebhookUpdate.js';
 import { sweepTracker } from '../antinuke/antiPing.js';
+import { isStagingMode, validateStagingPrerequisites } from '../utils/stagingGuard.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -106,7 +107,10 @@ class Roynix extends Client {
             console.log(`Shard ${id} resumed. Replayed events: ${replayedEvents}`);
         })
 
-        const databasePath = options.databasePath || process.env.ROYNIX_DB_DIR || path.join(__dirname, "../../database");
+        const defaultDbDir = isStagingMode()
+            ? path.join(__dirname, "../../database.staging")
+            : path.join(__dirname, "../../database");
+        const databasePath = options.databasePath || process.env.ROYNIX_DB_DIR || defaultDbDir;
         if (!fs.existsSync(databasePath)) {
             fs.mkdirSync(databasePath, { recursive: true });
         }
@@ -682,11 +686,33 @@ class Roynix extends Client {
     }
 
     async start() {
+        const { isStagingMode, validateStagingPrerequisites } = await import('../utils/stagingGuard.js');
+        if (isStagingMode()) {
+            const validation = validateStagingPrerequisites();
+            if (!validation.ready) {
+                const errMsg = `[StagingGuard] Staging startup aborted. Missing prerequisites: ${validation.missing.join(', ')}`;
+                console.error(errMsg);
+                throw new Error(errMsg);
+            }
+        }
+
         await Promise.all([
             this.noprefixDB.init(),
             this.prefixDB.init(),
             this.antinukeDB.init()
         ]).catch(() => null);
+
+        // Run additive schema migrations after DB init and before handlers load
+        try {
+            const { runMigrations } = await import('../utils/migrationManager.js');
+            const migrationResult = runMigrations(this.antinukeDB);
+            if (migrationResult?.applied?.length > 0) {
+                console.log(`[Migrations] Applied ${migrationResult.applied.length} schema migration(s):`, migrationResult.applied);
+            }
+        } catch (err) {
+            console.error('[Migrations] Failed to execute database migrations:', err?.message);
+        }
+
         await this.loadHandlers();
         await this.prewarmAntinukeCache();
         if (!config.token) {

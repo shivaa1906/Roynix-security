@@ -28,6 +28,71 @@ export const data = {
         const noprefixDB = client.noprefixDB;
         if (await handleMediaOnly(message, client)) return;
 
+        // Content Security Engine (Phishing, Scams, Attachments, Spam Rate)
+        try {
+            const antinukeData = await client.getAntinukeData?.(message.guild.id);
+            if (antinukeData?.enabled) {
+                const disabledEvents = antinukeData.disabledEvents || [];
+                const { evaluateActorTrust } = await import('../../utils/securityPolicy.js');
+                const actorTrust = evaluateActorTrust({
+                    guild: message.guild,
+                    client,
+                    antinukeData,
+                    executorId: message.author.id
+                });
+
+                if (!actorTrust.isExempt) {
+                    let shouldDelete = false;
+                    let violationReason = '';
+
+                    // 1. Phishing & Scam Filter
+                    if (!disabledEvents.includes('phishingDetector')) {
+                        const { checkPhishing } = await import('../../security/detection/phishingDetector.js');
+                        const phish = checkPhishing(message.content);
+                        if (phish.isPhishing) {
+                            shouldDelete = true;
+                            violationReason = `Phishing domain: ${phish.domain}`;
+                        }
+                    }
+
+                    // 2. Scam Pattern Regex
+                    if (!shouldDelete && !disabledEvents.includes('scamPatterns')) {
+                        const { checkScamPatterns } = await import('../../security/detection/scamPatterns.js');
+                        const scam = checkScamPatterns(message.content);
+                        if (scam.isScam) {
+                            shouldDelete = true;
+                            violationReason = 'Scam pattern detected';
+                        }
+                    }
+
+                    // 3. Dangerous Attachment Screening
+                    if (!shouldDelete && !disabledEvents.includes('attachmentScreening') && message.attachments?.size > 0) {
+                        const { screenAttachments } = await import('../../security/detection/attachmentScreening.js');
+                        const attCheck = screenAttachments([...message.attachments.values()]);
+                        if (attCheck.isDangerous) {
+                            shouldDelete = true;
+                            violationReason = `Dangerous attachment: ${attCheck.blockedFiles.join(', ')}`;
+                        }
+                    }
+
+                    // 4. Message Rate Limiter / User Spam
+                    if (!shouldDelete && !disabledEvents.includes('antiSpam')) {
+                        const { checkUserMessageRate } = await import('../../security/detection/messageSecurity.js');
+                        const spamCheck = checkUserMessageRate(message.guild.id, message.author.id, 5, 3000);
+                        if (spamCheck.isSpam) {
+                            shouldDelete = true;
+                            violationReason = 'Message rate limit exceeded';
+                        }
+                    }
+
+                    if (shouldDelete) {
+                        await message.delete().catch(() => null);
+                        return; // Prevent command parsing or auto-reactions on malicious messages
+                    }
+                }
+            }
+        } catch {}
+
         // Concurrently run background module handlers without blocking command parsing (0ms overhead)
         Promise.allSettled([
             handleAutoReact(message, client),

@@ -39,6 +39,19 @@ export const data = {
 
             quarantineGuildBots(guild, client, antinukeData).catch(() => null);
 
+            // Track mass kick action velocity
+            try {
+                const { trackAndCheckMassAction } = await import('../security/detection/massActionDetector.js');
+                const massCheck = trackAndCheckMassAction(guild.id, 'kick', executor.id);
+                if (massCheck.tripped) {
+                    circuitBreaker.recordIncident(guild, client, 'Mass Kick Detected', executor, {
+                        incidentKey: `mass_kick_${incident.incidentId}`,
+                        targetId: member.id,
+                        moduleKey: event
+                    }).catch(() => null);
+                }
+            } catch {}
+
             if (coordinator.claimCircuitBreaker(incident)) {
                 circuitBreaker.recordIncident(guild, client, 'Anti Kick', executor, {
                     incidentKey: incident.incidentId,

@@ -1,4 +1,5 @@
 import { Events, ChannelType, PermissionsBitField } from "discord.js";
+import { isStagingActionAllowed } from "../../utils/stagingGuard.js";
 
 export const data = {
     name: Events.VoiceStateUpdate,
@@ -7,7 +8,13 @@ export const data = {
         const client = newState.client;
         const guild = newState.guild;
 
-        const j2cData = await client.j2cDB.get(`j2cData_${guild.id}`);
+        // 1. Voice Security: Channel Hopping & Flood Protection
+        try {
+            const { checkVoiceState } = await import('../../security/detection/voiceSecurity.js');
+            await checkVoiceState(oldState, newState);
+        } catch {}
+
+        const j2cData = await client?.j2cDB?.get?.(`j2cData_${guild?.id}`);
         if (!j2cData) return;
 
         if (newState.channelId && newState.channelId === j2cData.channel) {
@@ -45,6 +52,9 @@ export const data = {
 
         const oldChannel = oldState?.channel;
         if (oldChannel) {
+            if (!isStagingActionAllowed(oldChannel.guild?.id).allowed) {
+                return;
+            }
             const activeData = await client.activeVcDB.get(oldChannel.id);
             if (activeData && oldChannel.members.size === 0) {
                 await oldChannel.delete().catch(() => {});

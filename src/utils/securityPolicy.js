@@ -34,7 +34,51 @@ export const KNOWN_MODULE_KEYS = new Set([
     'botQuarantine',
     'circuitBreaker',
     'snapshotRecovery',
-    'autoRecovery'
+    'autoRecovery',
+    'channelOverwriteProtection',
+    'rolePositionProtection',
+    'permissionEscalation',
+    'integrationProtection',
+    'inviteProtection',
+    'automodProtection',
+    'stageProtection',
+    'scheduledEventProtection',
+    'massBan',
+    'massKick',
+    'joinRaid',
+    'accountAgeScreening',
+    'altDetection',
+    'joinScoring',
+    'nicknameProtection',
+    'timeoutProtection',
+    'quarantineEvasion',
+    'verification',
+    'antiSpam',
+    'messageFlood',
+    'linkProtection',
+    'phishingDetector',
+    'scamPatterns',
+    'inviteFilter',
+    'duplicateMessages',
+    'capsFilter',
+    'emojiSpamFilter',
+    'impersonationDetector',
+    'nsfwEnforcer',
+    'toxicityFilter',
+    'attachmentScreening',
+    'channelRateLimiter',
+    'voiceSecurity',
+    'voiceJoinFlood',
+    'voiceDisconnect',
+    'voiceMove',
+    'voiceMuteAbuse',
+    'voiceDeafenAbuse',
+    'stageSpeakerAbuse',
+    'voiceLockdown',
+    'botApprovalWorkflow',
+    'botTrustRegistry',
+    'suspiciousAutomation',
+    'temporaryTrust'
 ]);
 
 /**
@@ -134,6 +178,17 @@ export function evaluateActorTrust({
     const validModuleKey = isValidModuleKey(moduleKey) ? moduleKey : null;
     if (isWhitelistedForEvent(whitelisted, executorId, validModuleKey)) {
         return { trustState: 'trusted', reason: 'event_whitelisted', isExempt: true };
+    }
+
+    // 6. Temporary Trust
+    if (antinukeData?.temporaryTrust && typeof antinukeData.temporaryTrust === 'object') {
+        const tempEntry = antinukeData.temporaryTrust[executorId];
+        if (tempEntry && (!tempEntry.expiresAt || tempEntry.expiresAt > Date.now())) {
+            const matchesModule = !tempEntry.moduleKey || tempEntry.moduleKey === '*' || tempEntry.moduleKey === moduleKey;
+            if (matchesModule) {
+                return { trustState: 'trusted', reason: 'temporary_trust', isExempt: true };
+            }
+        }
     }
 
     return { trustState: 'untrusted', reason: 'unauthorized_actor', isExempt: false };

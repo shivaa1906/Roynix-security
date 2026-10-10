@@ -5,6 +5,8 @@
   "main": "src/shard.js",
   "scripts": {
     "start": "node src/shard.js",
+    "start:staging": "NODE_ENV=staging node src/index.js",
+    "start:staging:shards": "NODE_ENV=staging node src/shard.js",
     "dev": "nodemon src/shard.js"
   },
   "author": "shiva (788970167907778562)",

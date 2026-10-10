@@ -37,14 +37,17 @@ export function redactSecrets(input, extraSecrets = []) {
     return text;
 }
 
-export function warn(message) {
-    console.log(chalk.yellowBright(`[WARNING]: [${new Date().toISOString()}] ${redactSecrets(message)}`));
+export function warn(message, ...args) {
+    const extra = args.length > 0 ? " " + args.map(a => a instanceof Error ? (a.stack || a.message) : String(a)).join(" ") : "";
+    console.log(chalk.yellowBright(`[WARNING]: [${new Date().toISOString()}] ${redactSecrets(String(message) + extra)}`));
 }
 
-export function info(message) {
-    console.log(chalk.greenBright(`[INFO]: [${new Date().toISOString()}] ${redactSecrets(message)}`));
+export function info(message, ...args) {
+    const extra = args.length > 0 ? " " + args.map(a => a instanceof Error ? (a.stack || a.message) : String(a)).join(" ") : "";
+    console.log(chalk.greenBright(`[INFO]: [${new Date().toISOString()}] ${redactSecrets(String(message) + extra)}`));
 }
 
-export function error(message) {
-    console.log(chalk.redBright(`[ERROR]: [${new Date().toISOString()}] ${redactSecrets(message)}`));
+export function error(message, ...args) {
+    const extra = args.length > 0 ? " " + args.map(a => a instanceof Error ? (a.stack || a.message) : String(a)).join(" ") : "";
+    console.log(chalk.redBright(`[ERROR]: [${new Date().toISOString()}] ${redactSecrets(String(message) + extra)}`));
 }

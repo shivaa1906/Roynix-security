@@ -24,7 +24,13 @@ export const data = {
 
             const punishment = antinukeData.punishment || 'ban';
 
-            // 1. Check if the joining bot itself is self or explicitly whitelisted for antiBot
+            // 1. Check if the joining bot itself is self, explicitly whitelisted, or approved in botTrustRegistry
+            let isTrustedInRegistry = false;
+            try {
+                const { botTrustRegistry } = await import('../services/botTrust/botTrustRegistry.js');
+                isTrustedInRegistry = botTrustRegistry.isBotTrusted(guild.id, member.id);
+            } catch {}
+
             const targetTrust = evaluateActorTrust({
                 guild,
                 client,
@@ -33,7 +39,7 @@ export const data = {
                 executorId: null,
                 targetId: member.id
             });
-            if (targetTrust.isExempt) return;
+            if (targetTrust.isExempt || isTrustedInRegistry) return;
 
             // 2. Resolve inviter BEFORE deciding whether the invited bot is unauthorized
             const executor = await getAuditExecutor(guild, AuditLogEvent.BotAdd, member.id, client);

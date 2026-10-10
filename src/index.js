@@ -7,6 +7,7 @@ import { info } from './utils/logger.js';
 import getQuickDBPing from './utils/dbPing.js';
 import getUptimeTimestamp from './utils/uptime.js';
 import { startKeepAlive } from './utils/keepAlive.js';
+import { isStagingMode, validateStagingPrerequisites } from './utils/stagingGuard.js';
 /**
  * @param {import('discord.js').Client} client
  */
@@ -98,6 +99,15 @@ app.use('/api', createStatsAPI(client));
 
 let httpServer = null;
 
+// Validate staging prerequisites before binding ports or starting services
+if (isStagingMode()) {
+    const validation = validateStagingPrerequisites();
+    if (!validation.ready) {
+        console.error(`[StagingGuard] Refusing to start: Missing staging prerequisites: ${validation.missing.join(', ')}`);
+        process.exit(1);
+    }
+}
+
 // Bind immediately on Shard 0 (or unsharded) to satisfy platform health checks within seconds
 if (!client.shard || client.shard.ids.includes(0)) {
     httpServer = app.listen(PORT, '0.0.0.0', () => {
@@ -134,4 +144,8 @@ process.once('SIGTERM', () => handleProcessShutdown('SIGTERM'));
 
 client.start().catch((err) => {
     console.error('Failed to start client:', err);
+    if (httpServer) {
+        try { httpServer.close(); } catch {}
+    }
+    process.exit(1);
 });

@@ -3,6 +3,7 @@ import { isBotOwner } from '../utils/isBotOwner.js';
 import emojis from '../config/emojis.js';
 import { getAuditExecutor } from '../utils/getExecutor.js';
 import { evaluateActorTrust, isWhitelistedForEvent } from '../utils/securityPolicy.js';
+import { isStagingActionAllowed } from '../utils/stagingGuard.js';
 
 const DANGEROUS_PERMS = [
     PermissionFlagsBits.Administrator,
@@ -104,7 +105,7 @@ export async function neutralizeBotDangerousRoles(botMember, dangerousRoles, rea
  * @param {object} [antinukeData]
  */
 export async function quarantineGuildBots(guild, client, antinukeData = null) {
-    if (!guild) return 0;
+    if (!guild || !isStagingActionAllowed(guild.id).allowed) return 0;
     try {
         const data = antinukeData || await client.getAntinukeData(guild.id);
         if (!data?.enabled || data?.disabledEvents?.includes('zeroTrustQuarantine')) return 0;

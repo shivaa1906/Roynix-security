@@ -33,6 +33,19 @@ export const data = {
 
       if (antinukeData?.disabledEvents?.includes(event) && !isProtectRole) return;
 
+      // 1. Specialized Role Hierarchy & Permission Escalation Detection
+      if (!isProtectRole && oldRole) {
+        try {
+          const { checkRolePosition } = await import('../security/detection/rolePositionProtection.js');
+          const posHandled = await checkRolePosition(oldRole, newRole);
+          if (posHandled) return;
+
+          const { checkRolePermissionEscalation } = await import('../security/detection/permissionEscalation.js');
+          const permHandled = await checkRolePermissionEscalation(oldRole, newRole);
+          if (permHandled) return;
+        } catch {}
+      }
+
       const punishment = antinukeData.punishment || 'ban';
 
       const executor = await getAuditExecutor(guild, AuditLogEvent.RoleUpdate, newRole.id, client);

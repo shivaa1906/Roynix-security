@@ -1,5 +1,6 @@
 import { ChannelType, PermissionsBitField, OverwriteType } from 'discord.js';
 import { circuitBreaker } from './circuitBreaker.js';
+import { isStagingActionAllowed } from './stagingGuard.js';
 
 function toEntriesArray(collectionOrMap) {
     if (!collectionOrMap) return [];
@@ -606,7 +607,7 @@ class BlueprintManager {
      * @returns {Promise<boolean>}
      */
     async restoreChannelHierarchical(guild, channelFallback) {
-        if (!guild || !channelFallback) return false;
+        if (!guild || !channelFallback || !isStagingActionAllowed(guild.id).allowed) return false;
         const guildId = guild.id;
         const channelId = typeof channelFallback === 'string' ? channelFallback : channelFallback.id;
         if (!channelId) return false;
@@ -764,7 +765,7 @@ class BlueprintManager {
      * @returns {Promise<boolean>}
      */
     async restoreRole(guild, roleFallback) {
-        if (!guild || !roleFallback) return false;
+        if (!guild || !roleFallback || !isStagingActionAllowed(guild.id).allowed) return false;
         const roleId = typeof roleFallback === 'string' ? roleFallback : roleFallback.id;
         if (!roleId) return false;
 

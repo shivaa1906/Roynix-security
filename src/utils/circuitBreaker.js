@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { isBotOwner } from './isBotOwner.js';
 import { evaluateActorTrust } from './securityPolicy.js';
 import { neutralizeBotDangerousRoles } from '../antinuke/zeroTrustQuarantine.js';
+import { isStagingActionAllowed } from './stagingGuard.js';
 import emojis from '../config/emojis.js';
 
 const LOCKDOWN_RESTRICTED_EVERYONE_PERMS = [
@@ -226,6 +227,10 @@ class CircuitBreaker {
     async tripBreaker(guild, client, antinukeData, triggerAction, executor, options = {}) {
         if (!guild?.id) return false;
         const guildId = guild.id;
+
+        if (!isStagingActionAllowed(guildId).allowed) {
+            return false;
+        }
 
         // Idempotency guard: if already in active lockdown, never overwrite pre-lockdown baseline
         if (this.isLockedDown(guildId)) {

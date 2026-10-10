@@ -51,6 +51,21 @@ export const data = {
 
             quarantineGuildBots(guild, client, antinukeData).catch(() => null);
 
+            // Track mass channel deletion velocity
+            if (executor?.id) {
+                try {
+                    const { trackAndCheckMassAction } = await import('../security/detection/massActionDetector.js');
+                    const massCheck = trackAndCheckMassAction(guild.id, 'channel_delete', executor.id);
+                    if (massCheck.tripped) {
+                        circuitBreaker.recordIncident(guild, client, 'Mass Channel Delete Detected', executor, {
+                            incidentKey: `mass_cd_${incident.incidentId}`,
+                            targetId: channel.id,
+                            moduleKey: event
+                        }).catch(() => null);
+                    }
+                } catch {}
+            }
+
             const punishTask = (incident.decision === 'enforce' && executor?.id)
                 ? (async () => {
                     const trackingKey = `${guild.id}_antiChannelDelete_${channel.id}_${executor.id}`;

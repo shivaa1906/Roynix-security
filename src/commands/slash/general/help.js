@@ -66,6 +66,7 @@ export const data = {
                     { cmd: "antinuke whitelist <add|remove|show|reset>", desc: "Manage trusted whitelisted moderators" },
                     { cmd: "antinuke extraowner <add|remove|show|reset>", desc: "Manage server extra owners" },
                     { cmd: "antinuke punishment <set|show>", desc: "Set enforcement action (ban/kick/timeout)" },
+                    { cmd: "antinuke protectrole <setup|sync>", desc: "Setup or sync the Roynix Protect role" },
                     { cmd: "antinuke logging <set|remove>", desc: "Set anti-nuke alerts log channel" },
                     { cmd: "antinuke toggle [module]", desc: "Toggle a module or open interactive menu" },
                     { cmd: "antinuke modules", desc: "Interactive protection module manager" },

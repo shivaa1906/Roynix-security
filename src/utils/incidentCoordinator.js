@@ -1,5 +1,10 @@
 import { evaluateActorTrust } from './securityPolicy.js';
 import { redactSecrets } from './logger.js';
+import { isMaintenanceModeActive } from './maintenanceMode.js';
+import { isFeatureEnabled } from './featureFlagService.js';
+import { calculateIncidentSeverity } from '../services/threatScoring/severityScorer.js';
+import { recordTimelineEvent } from '../services/incidents/incidentTimeline.js';
+import { isStagingActionAllowed } from './stagingGuard.js';
 
 const POSITIVE_ENFORCEMENT_OUTCOMES = new Set([
     'Banned',
@@ -272,7 +277,14 @@ export class IncidentCoordinator {
 
         const allowUnattributedRecovery = Boolean(isProtectRoleTarget || isRaidIncident);
 
+        const isMaintenance = isMaintenanceModeActive(guildId);
+        const isFlagAllowed = isFeatureEnabled(guildId, `module:${moduleKey}`, true);
+        const stagingCheck = isStagingActionAllowed(guildId);
+
         const isModuleEnabled = Boolean(
+            stagingCheck.allowed &&
+            !isMaintenance &&
+            isFlagAllowed &&
             antinukeData?.enabled &&
             moduleKey &&
             (isProtectRoleTarget || isBotSelfTarget || !antinukeData?.disabledEvents?.includes(moduleKey))
@@ -311,6 +323,21 @@ export class IncidentCoordinator {
         }
 
         const incidentId = `${baseKey}:${normalizedAuditId || now}`;
+        const severity = calculateIncidentSeverity({
+            moduleKey,
+            actionType,
+            isRaid: isRaidIncident,
+            hasAdminEscalation: isProtectRole
+        });
+
+        recordTimelineEvent(incidentId, {
+            type: 'detection',
+            actorId: normalizedExecutorId,
+            targetId: normalizedTargetId,
+            details: `Detected event for ${moduleKey}`,
+            timestamp: now
+        });
+
         const incident = {
             incidentId,
             key: incidentId,
@@ -318,6 +345,7 @@ export class IncidentCoordinator {
             guildId,
             actionType,
             moduleKey,
+            severity,
             targetId: normalizedTargetId,
             executorId: normalizedExecutorId,
             auditEntryId: normalizedAuditId,
@@ -366,6 +394,10 @@ export class IncidentCoordinator {
      */
     async executePunishment({ guildId, executorId, incident = null, forceReexecute = false, executeFn }) {
         if (!guildId || !executorId || typeof executeFn !== 'function') {
+            return 'No Action';
+        }
+
+        if (!isStagingActionAllowed(guildId).allowed) {
             return 'No Action';
         }
 
@@ -501,7 +533,12 @@ export class IncidentCoordinator {
      */
     async executeRecovery(incident, recoveryFn, options = {}) {
         if (typeof recoveryFn !== 'function') return false;
-        if (!incident) return await recoveryFn();
+        if (!incident) {
+            return isStagingActionAllowed().allowed ? await recoveryFn() : false;
+        }
+        if (incident.guildId && !isStagingActionAllowed(incident.guildId).allowed) {
+            return false;
+        }
         if (incident.decision === 'allow' || incident.decision === 'disabled' || incident.trustState === 'trusted') {
             return false;
         }
@@ -569,3 +606,13 @@ export class IncidentCoordinator {
 }
 
 export const incidentCoordinator = new IncidentCoordinator();
+
+/**
+ * Convenience helper to coordinate an incident using client.incidentCoordinator or singleton.
+ * @param {Parameters<IncidentCoordinator['coordinateIncident']>[0]} params
+ * @returns {ReturnType<IncidentCoordinator['coordinateIncident']>}
+ */
+export function coordinateIncident(params) {
+    const coordinator = params?.client?.incidentCoordinator || incidentCoordinator;
+    return coordinator.coordinateIncident(params);
+}

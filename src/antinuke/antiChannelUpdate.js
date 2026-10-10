@@ -23,6 +23,13 @@ export const data = {
                 blueprintManager.seedChannelIfMissing(oldChannel);
             }
 
+            // 1. Specialized Channel Overwrite Escalation Check
+            try {
+                const { checkChannelOverwrites } = await import('../security/detection/channelOverwriteProtection.js');
+                const overwriteHandled = await checkChannelOverwrites(oldChannel, newChannel);
+                if (overwriteHandled) return;
+            } catch {}
+
             const antinukeData = await client.getAntinukeData(guild.id);
             if (!antinukeData?.enabled) return;
             if (antinukeData?.disabledEvents?.includes(event)) return;

@@ -4,15 +4,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import config from './config/config.js';
 import { warn, info, error } from './utils/logger.js';
+import { isStagingMode } from './utils/stagingGuard.js';
 import 'dotenv/config'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const token = process.env.TOKEN;
+const isStaging = isStagingMode();
+const token = isStaging ? process.env.STAGING_DISCORD_TOKEN : process.env.TOKEN;
 const clientId = config.clientId;
 
-if (!token || !clientId) {
+if (isStaging) {
+    if (!token || !process.env.STAGING_GUILD_ID) {
+        warn('[StagingGuard] Staging command deployment aborted: missing STAGING_DISCORD_TOKEN or STAGING_GUILD_ID');
+        process.exit(1);
+    }
+} else if (!token || !clientId) {
     error('Missing TOKEN or CLIENT_ID in environment variables.');
     process.exit(1);
 }
@@ -48,11 +55,22 @@ for (const category of commandCategories) {
 const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
+    if (isStaging && (!token || !process.env.STAGING_GUILD_ID)) return;
     try {
-        info(`Starting deployment of ${globalCommands.length} application (/) commands.`);
+        let route;
+        if (isStaging) {
+            if (!process.env.STAGING_GUILD_ID) {
+                throw new Error('[StagingGuard] Staging command deployment aborted: missing STAGING_GUILD_ID');
+            }
+            route = Routes.applicationGuildCommands(clientId, process.env.STAGING_GUILD_ID);
+        } else {
+            route = Routes.applicationCommands(clientId);
+        }
+
+        info(`Starting deployment of ${globalCommands.length} application (/) commands (${isStaging ? 'Guild: ' + process.env.STAGING_GUILD_ID : 'Global'}).`);
 
         const data = await rest.put(
-            Routes.applicationCommands(clientId),
+            route,
             { body: globalCommands }
         );
 

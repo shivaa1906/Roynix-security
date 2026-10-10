@@ -1,9 +1,21 @@
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+
 dotenv.config();
 
+const isStaging = process.env.NODE_ENV === 'staging' || process.env.STAGING_MODE === 'true';
+
+if (isStaging) {
+    const stagingEnvPath = path.resolve(process.cwd(), '.env.staging');
+    if (fs.existsSync(stagingEnvPath)) {
+        dotenv.config({ path: stagingEnvPath, override: true });
+    }
+}
+
 const config = {
-    token: process.env.TOKEN || "",
-    clientId: process.env.CLIENT_ID || "",
+    token: isStaging ? (process.env.STAGING_DISCORD_TOKEN || "") : (process.env.TOKEN || ""),
+    clientId: isStaging ? (process.env.STAGING_CLIENT_ID || process.env.CLIENT_ID || "") : (process.env.CLIENT_ID || ""),
     prefix: process.env.PREFIX || '!',
     color: process.env.BOT_COLOR ? (isNaN(process.env.BOT_COLOR) ? process.env.BOT_COLOR : parseInt(process.env.BOT_COLOR)) : 2829616,
     owners: process.env.OWNERS ? process.env.OWNERS.split(',').map(id => id.trim()) : [

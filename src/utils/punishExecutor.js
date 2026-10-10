@@ -1,6 +1,7 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { evaluateActorTrust, isValidModuleKey } from './securityPolicy.js';
 import { incidentCoordinator, isVerifiedEnforcementOutcome } from './incidentCoordinator.js';
+import { isStagingActionAllowed } from './stagingGuard.js';
 
 const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
 
@@ -203,6 +204,11 @@ export async function punishExecutor(
     options = {}
 ) {
     if (!guild || !executor?.id) return 'No Action';
+
+    const stagingCheck = isStagingActionAllowed(guild.id);
+    if (!stagingCheck.allowed) {
+        return 'No Action';
+    }
 
     const botClient = client || guild.client || null;
     let antinukeData = options.antinukeData || botClient?.antinukeCache?.get?.(guild.id) || null;

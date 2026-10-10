@@ -1,6 +1,10 @@
 .env
+.env*
 node_modules/
 database/
+database.backup*/
+database.staging/
+*.patch
 *.db
 *.sqlite
 *.log

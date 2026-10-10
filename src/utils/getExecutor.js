@@ -378,4 +378,4 @@ async function getAuditExecutor(guild, type, targetId = null, client = null, opt
     }
 }
 
-export { getAuditExecutor };
+export { getAuditExecutor, getAuditExecutor as getExecutor };

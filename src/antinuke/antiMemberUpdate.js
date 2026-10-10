@@ -30,6 +30,23 @@ import {
 
         if (!roleChanged && !nicknameChanged && !timeoutChanged) return;
 
+        // 1. Timeout Protection
+        if (timeoutChanged && oldMember) {
+          try {
+            const { checkMemberTimeout } = await import('../security/detection/timeoutProtection.js');
+            const timeoutHandled = await checkMemberTimeout(oldMember, newMember);
+            if (timeoutHandled) return;
+          } catch {}
+        }
+
+        // 2. Nickname Sanitization / Dehoisting
+        if (nicknameChanged) {
+          try {
+            const { sanitizeNickname } = await import('../security/detection/nicknameProtection.js');
+            await sanitizeNickname(newMember);
+          } catch {}
+        }
+
         const actionType = roleChanged ? AuditLogEvent.MemberRoleUpdate : AuditLogEvent.MemberUpdate;
         const executor = roleChanged
           ? (await getAuditExecutor(guild, AuditLogEvent.MemberRoleUpdate, newMember.id, client)

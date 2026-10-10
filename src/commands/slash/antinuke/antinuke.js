@@ -81,7 +81,7 @@ export const data = {
                         .setDescription('The module to toggle (leave blank for interactive menu)')
                         .setRequired(false)
                         .addChoices(
-                            ...antinukeModules.map(m => ({ name: m.name, value: m.key }))
+                            ...antinukeModules.slice(0, 25).map(m => ({ name: m.name, value: m.key }))
                         )
                 )
         ).addSubcommand(subcommand =>

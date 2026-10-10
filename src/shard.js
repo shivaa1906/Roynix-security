@@ -7,6 +7,8 @@ import './deploy.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { isStagingMode, validateStagingPrerequisites } from './utils/stagingGuard.js';
+
 process.on('unhandledRejection', (reason) => {
     console.error('[Master Sharding] Unhandled Rejection:', reason);
 });
@@ -15,9 +17,20 @@ process.on('uncaughtException', (err) => {
     console.error('[Master Sharding] Uncaught Exception:', err);
 });
 
+if (isStagingMode()) {
+    const val = validateStagingPrerequisites();
+    if (!val.ready) {
+        console.error('[StagingGuard] Master sharding startup aborted. Missing prerequisites:', val.missing, val.errors);
+        process.exit(1);
+    }
+}
+
+const activeToken = isStagingMode() ? process.env.STAGING_DISCORD_TOKEN : process.env.TOKEN;
+const totalShards = isStagingMode() ? 1 : 2;
+
 const manager = new ShardingManager(path.resolve(__dirname, 'index.js'), {
-    totalShards: 2,
-    token: process.env.TOKEN,
+    totalShards,
+    token: activeToken,
     respawn: true,
 });
 
