@@ -2,12 +2,13 @@ import express from 'express';
 import os from 'os';
 import process from 'process';
 import { Roynix } from './base/Roynix.js';
+import { FastDB } from './utils/fastDb.js';
 import { info } from './utils/logger.js';
 import getQuickDBPing from './utils/dbPing.js';
 import getUptimeTimestamp from './utils/uptime.js';
 import { startKeepAlive } from './utils/keepAlive.js';
 /**
- * @param {import('discord.js').Client} client 
+ * @param {import('discord.js').Client} client
  */
 export function createStatsAPI(client) {
     const router = express.Router();
@@ -19,12 +20,12 @@ export function createStatsAPI(client) {
             }
 
             const start = Date.now();
-            const dbPing = await getQuickDBPing(); 
+            const dbPing = await getQuickDBPing();
             const clientPing = Date.now() - start;
 
             const stats = {
                 version: "2.0.0",
-                uptime: getUptimeTimestamp(client), 
+                uptime: getUptimeTimestamp(client),
                 library: "discord.js",
                 ping: {
                     api: client.ws.ping,
@@ -95,9 +96,11 @@ app.get('/ping', (req, res) => {
 
 app.use('/api', createStatsAPI(client));
 
+let httpServer = null;
+
 // Bind immediately on Shard 0 (or unsharded) to satisfy platform health checks within seconds
 if (!client.shard || client.shard.ids.includes(0)) {
-    app.listen(PORT, '0.0.0.0', () => {
+    httpServer = app.listen(PORT, '0.0.0.0', () => {
         info(`[Web Service] Roynix Shield listening on 0.0.0.0:${PORT}`);
         info(`[Web Service] Health check: http://0.0.0.0:${PORT}/health`);
         info(`[Web Service] Stats API: http://0.0.0.0:${PORT}/api/stats`);
@@ -106,6 +109,28 @@ if (!client.shard || client.shard.ids.includes(0)) {
         startKeepAlive(PORT);
     });
 }
+
+let shuttingDown = false;
+async function handleProcessShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    info(`[Process] Received ${signal}. Flushing SQLite WAL and shutting down cleanly...`);
+    try {
+        if (httpServer) {
+            httpServer.close();
+        }
+    } catch {}
+    try {
+        await client.shutdown(signal);
+    } catch {}
+    try {
+        FastDB.closeAll();
+    } catch {}
+    process.exit(0);
+}
+
+process.once('SIGINT', () => handleProcessShutdown('SIGINT'));
+process.once('SIGTERM', () => handleProcessShutdown('SIGTERM'));
 
 client.start().catch((err) => {
     console.error('Failed to start client:', err);

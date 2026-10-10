@@ -1,15 +1,14 @@
 import {
     AuditLogEvent,
-    ChannelType,
     EmbedBuilder,
 } from 'discord.js';
-import { isBotOwner } from '../utils/isBotOwner.js';
 import emojis from '../config/emojis.js';
 import { getAuditExecutor } from '../utils/getExecutor.js';
 import { punishExecutor } from '../utils/punishExecutor.js';
 import { blueprintManager } from '../utils/blueprintManager.js';
 import { circuitBreaker } from '../utils/circuitBreaker.js';
 import { quarantineGuildBots } from './zeroTrustQuarantine.js';
+import { incidentCoordinator } from '../utils/incidentCoordinator.js';
 
 export const data = {
     /**
@@ -17,7 +16,7 @@ export const data = {
      */
     async execute(client) {
         client.on('channelDelete', async (channel) => {
-            if (!channel.guild || channel.isThread?.()) return;
+            if (!channel?.guild || channel.isThread?.()) return;
             const guild = channel.guild;
             const event = 'antiChannelDelete';
 
@@ -25,59 +24,69 @@ export const data = {
             if (!antinukeData?.enabled) return;
             if (antinukeData?.disabledEvents?.includes(event)) return;
 
-            // Neutralize any other unwhitelisted bots holding administrative roles during destructive actions
-            quarantineGuildBots(guild, client, antinukeData).catch(() => null);
-
-            const extraOwners = antinukeData.extraOwners || [];
-            const whitelisted = antinukeData.whitelisted || {};
             const punishment = antinukeData.punishment || 'ban';
-
-            let executor = await getAuditExecutor(guild, AuditLogEvent.ChannelDelete, channel.id, client);
+            const executor = await getAuditExecutor(guild, AuditLogEvent.ChannelDelete, channel.id, client);
             const isRaidIncident = circuitBreaker.isLockedDown(guild.id);
+            const coordinator = client.incidentCoordinator || incidentCoordinator;
 
-            if (executor) {
-                if (
-                    executor.id === client.user.id ||
-                    executor.id === guild.ownerId ||
-                    isBotOwner(executor.id) ||
-                    extraOwners.includes(executor.id) ||
-                    whitelisted[executor.id]?.events?.includes(event)
-                ) return; // Authorized deletion by server owner or whitelisted manager
-            } else if (!isRaidIncident) {
-                // Wait up to 350ms to allow gateway/REST audit log to register before deciding
-                await new Promise(r => setTimeout(r, 350));
-                executor = await getAuditExecutor(guild, AuditLogEvent.ChannelDelete, channel.id, client);
-                if (executor) {
-                    if (
-                        executor.id === client.user.id ||
-                        executor.id === guild.ownerId ||
-                        isBotOwner(executor.id) ||
-                        extraOwners.includes(executor.id) ||
-                        whitelisted[executor.id]?.events?.includes(event)
-                    ) return;
-                } else {
-                    // Still no executor and no active raid burst detected, abort
-                    return;
-                }
+            const incident = coordinator.coordinateIncident({
+                guild,
+                client,
+                antinukeData,
+                actionType: AuditLogEvent.ChannelDelete,
+                moduleKey: event,
+                targetId: channel.id,
+                executorId: executor?.id || null,
+                auditEntryId: executor?.auditEntryId || null,
+                isRaidIncident
+            });
+
+            if (incident.decision === 'allow' || incident.trustState === 'trusted') {
+                blueprintManager.removeChannelSnapshot(guild.id, channel.id);
+                return;
+            }
+            if (incident.decision !== 'enforce' && !isRaidIncident) {
+                return;
             }
 
-            const punishTask = executor
+            quarantineGuildBots(guild, client, antinukeData).catch(() => null);
+
+            const punishTask = (incident.decision === 'enforce' && executor?.id)
                 ? (async () => {
                     const trackingKey = `${guild.id}_antiChannelDelete_${channel.id}_${executor.id}`;
-                    const res = await punishExecutor(guild, executor, punishment, 'Roynix Antinuke System | Anti Channel Delete', client, trackingKey);
-                    circuitBreaker.recordIncident(guild, client, 'Anti Channel Delete', executor).catch(() => null);
+                    const res = await punishExecutor(
+                        guild,
+                        executor,
+                        punishment,
+                        'Roynix Antinuke System | Anti Channel Delete',
+                        client,
+                        trackingKey,
+                        { incident, antinukeData, moduleKey: event, targetId: channel.id }
+                    );
+                    if (coordinator.claimCircuitBreaker(incident)) {
+                        circuitBreaker.recordIncident(guild, client, 'Anti Channel Delete', executor, {
+                            incidentKey: incident.incidentId,
+                            auditEntryId: executor?.auditEntryId || null,
+                            targetId: channel.id,
+                            moduleKey: event
+                        }).catch(() => null);
+                    }
                     return res;
                 })()
                 : Promise.resolve(null);
 
             const recoverTask = !antinukeData?.disabledEvents?.includes('autoRecovery')
-                ? blueprintManager.restoreChannelHierarchical(guild, channel)
+                ? coordinator.executeRecovery(
+                    incident,
+                    () => blueprintManager.restoreChannelHierarchical(guild, channel),
+                    { allowAuthorizedUnattributed: isRaidIncident }
+                )
                 : Promise.resolve(false);
 
             const [actionTaken, recreated] = await Promise.all([punishTask, recoverTask]);
 
             const logChannelId = antinukeData.logsChannel;
-            if (logChannelId && executor) {
+            if (logChannelId && executor?.id) {
                 const logChannel = guild.channels.cache.get(logChannelId) || await guild.channels.fetch(logChannelId).catch(() => null);
                 if (logChannel) {
                     const embed = new EmbedBuilder()

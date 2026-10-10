@@ -4,7 +4,9 @@ import { isBotOwner } from '../../../utils/isBotOwner.js'
 import { paginate } from '../../../utils/pagination.js'
 import { antinukeModules, findModule, renderEventsList } from '../../../utils/antinukeModules.js'
 import { quarantineGuildBots } from '../../../antinuke/zeroTrustQuarantine.js'
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+import { isCommandAuthorized, verifyCollectorInteraction, positionAndAuditProtectRole } from '../../../utils/securityPolicy.js'
+import { blueprintManager } from '../../../utils/blueprintManager.js'
+const delay = (ms, client = null) => new Promise(resolve => setTimeout(resolve, typeof client?.stepDelayMs === 'number' ? client.stepDelayMs : ms));
 
 export const data = {
     data: new SlashCommandBuilder()
@@ -100,7 +102,7 @@ export const data = {
         const antinukeDB = client.antinukeDB
         const antinukeData = await antinukeDB.get(`antinukeData_${guild.id}`) || {}
 
-        if (!isBotOwner(interaction.user.id) && interaction.user.id !== guild.ownerId && !antinukeData?.extraOwners?.includes(interaction.user.id)) {
+        if (!isCommandAuthorized(guild, interaction.user.id, antinukeData, client)) {
             return await interaction.reply({
                 embeds: [
                     new EmbedBuilder()
@@ -113,6 +115,7 @@ export const data = {
         if (subcommand === 'enable') {
             await interaction.deferReply();
             if (antinukeData?.enabled) {
+                await blueprintManager.syncProtectRoleIfStale(guild, client, antinukeData);
                 return await interaction.editReply({
                     embeds: [
                         new EmbedBuilder()
@@ -146,8 +149,11 @@ export const data = {
                 return interaction.editReply({ embeds: [setupEmbed] });
             }
 
-            let protectRole = (antinukeData?.protectRole && guild.roles.cache.get(antinukeData.protectRole))
-                || guild.roles.cache.find(r => r.name === 'Roynix Protect' || r.name === 'Roynix Shield Protect');
+            let protectRole = (
+                antinukeData?.protectRole &&
+                (guild.roles.cache.get(antinukeData.protectRole) ||
+                    (typeof guild.roles.fetch === 'function' ? await guild.roles.fetch(antinukeData.protectRole).catch(() => null) : null))
+            ) || guild.roles.cache.find(r => !r?.managed && (r.name === 'Roynix Protect' || r.name === 'Roynix Shield Protect'));
 
             if (!protectRole) {
                 try {
@@ -165,6 +171,11 @@ export const data = {
                 }
             }
 
+            if (typeof me.roles?.add === 'function' && !me.roles?.cache?.has?.(protectRole.id)) {
+                await me.roles.add(protectRole.id, 'Server protection system').catch(() => null);
+            }
+            blueprintManager.recordRole(protectRole, { trusted: true });
+
             const newConfig = {
                 enabled: true,
                 extraOwners: antinukeData?.extraOwners || [],
@@ -175,24 +186,15 @@ export const data = {
                 punishment: antinukeData?.punishment || 'ban',
                 disabledEvents: antinukeData?.disabledEvents || []
             };
-            await client.setAntinukeData(guild.id, newConfig);
+            if (typeof client.setAntinukeData === 'function') {
+                await client.setAntinukeData(guild.id, newConfig);
+            } else {
+                await antinukeDB.set(`antinukeData_${guild.id}`, newConfig);
+            }
 
-            let rolePositionWarning = '';
-            try {
-                const highestBotRolePos = me.roles?.highest?.position ?? 0;
-                const serverHighestPos = guild.roles.highest?.position ?? 0;
-                if (highestBotRolePos > 1 && protectRole.position < highestBotRolePos - 1) {
-                    const moved = await protectRole.setPosition(highestBotRolePos - 1).catch(() => null);
-                    if (!moved) {
-                        rolePositionWarning = `\n\n${emojis.warn} **Role Hierarchy Warning**: Could not automatically move <@&${protectRole.id}> near the top. Please drag it manually below my highest role.`;
-                    }
-                }
-                if (highestBotRolePos < serverHighestPos - 1) {
-                    rolePositionWarning += `\n\n${emojis.warn} **Hierarchy Notice**: My highest role (<@&${me.roles.highest.id}>) is currently below other roles in this server. Move my role to the very top of Server Settings → Roles so I can punish any attacker.`;
-                }
-            } catch (roleError) { }
+            const { rolePositionWarning } = await positionAndAuditProtectRole(guild, me, protectRole, emojis);
 
-            await delay(1200);
+            await delay(1200, client);
 
             // Intermediate Frame: Progress Animation
             setupEmbed.setDescription(`${emojis.antinuke} **Initializing protection setup...**\n`
@@ -224,7 +226,7 @@ export const data = {
                 }
             } catch {}
 
-            await delay(1500);
+            await delay(1500, client);
 
             // Final Frame: Complete with guaranteed retry so it never stays stuck
             setupEmbed.setDescription(
@@ -246,7 +248,7 @@ export const data = {
                     await interaction.editReply({ embeds: [setupEmbed] });
                     finalEdited = true;
                 } catch {
-                    await delay(1200);
+                    await delay(1200, client);
                 }
             }
         }
@@ -254,7 +256,9 @@ export const data = {
         else if (subcommand === 'disable') {
             await interaction.deferReply();
 
-            const antinukeData = await client.getAntinukeData(guild.id);
+            const antinukeData = (typeof client.getAntinukeData === 'function'
+                ? await client.getAntinukeData(guild.id)
+                : await antinukeDB.get(`antinukeData_${guild.id}`)) || {};
 
             if (!antinukeData?.enabled) {
                 return interaction.editReply({
@@ -290,7 +294,7 @@ export const data = {
                 return interaction.editReply({ embeds: [disableEmbed] });
             }
 
-            await delay(1000);
+            await delay(1000, client);
 
             // Frame 2: Permission check passed & Removing protection role
             disableEmbed.setDescription(`${emojis.antinuke} **Initializing full protection shutdown...**\n`
@@ -299,31 +303,61 @@ export const data = {
             await interaction.editReply({ embeds: [disableEmbed] }).catch(() => null);
 
             let roleDeleted = false;
+            let roleDeleteWarning = null;
             if (antinukeData.protectRole) {
                 try {
-                    const role = await guild.roles.fetch(antinukeData.protectRole);
+                    const effectiveRoleId = blueprintManager.recreatedRoles.get(antinukeData.protectRole) || antinukeData.protectRole;
+                    const role = guild.roles?.cache?.get?.(effectiveRoleId)
+                        || (typeof guild.roles?.fetch === 'function' ? await guild.roles.fetch(effectiveRoleId).catch(() => null) : null);
                     if (role) {
-                        await role.delete('Antinuke system disabled').catch(() => null);
-                        roleDeleted = true;
+                        const highestBotRolePos = me.roles?.highest?.position ?? 0;
+                        if (role.editable === false || (highestBotRolePos > 0 && typeof role.position === 'number' && role.position >= highestBotRolePos)) {
+                            roleDeleteWarning = 'Delete Blocked by Role Hierarchy';
+                        } else {
+                            let deletedOk = false;
+                            await role.delete('Antinuke system disabled').then(() => {
+                                deletedOk = true;
+                            }).catch(() => {
+                                deletedOk = false;
+                            });
+                            if (deletedOk) {
+                                roleDeleted = true;
+                                blueprintManager.removeRoleSnapshot(guild.id, role.id);
+                            } else {
+                                roleDeleteWarning = 'Delete Failed (Hierarchy / Missing Permissions)';
+                            }
+                        }
                     }
-                } catch (e) { }
+                } catch (e) {
+                    roleDeleteWarning = 'Delete Failed';
+                }
             }
 
             // Preserve whitelists, extraOwners, logsChannel, punishment, and disabledEvents while turning off protection
-            await client.setAntinukeData(guild.id, {
+            const disabledConfig = {
                 ...antinukeData,
                 enabled: false,
                 protectRole: null
-            });
+            };
+            if (typeof client.setAntinukeData === 'function') {
+                await client.setAntinukeData(guild.id, disabledConfig);
+            } else {
+                await antinukeDB.set(`antinukeData_${guild.id}`, disabledConfig);
+            }
 
-            await delay(1200);
+            await delay(1200, client);
 
             // Final Frame: Complete System Shutdown!
+            const roleStatusText = roleDeleted
+                ? '`Deleted`'
+                : roleDeleteWarning
+                    ? `\`${roleDeleteWarning}\` ${emojis.warn}`
+                    : '`Not found`';
             disableEmbed.setDescription(
                 `${emojis.tick} **Complete System Shutdown!**\n\n`
                 + `__**${emojis.warn} Protection Disabled**__\n`
                 + `> ${emojis.arrow} **Status:** \`Disabled\` ${emojis.cross}\n`
-                + `> ${emojis.arrow} **Role:** ${roleDeleted ? '`Deleted`' : '`Not found`'}\n`
+                + `> ${emojis.arrow} **Role:** ${roleStatusText}\n`
                 + `> ${emojis.arrow} **Saved Settings:** \`Whitelists & Owners Preserved\` ${emojis.tick}\n\n`
                 + `-# Use \`/antinuke enable\` to re-activate protection with your saved settings.`
             );
@@ -335,13 +369,13 @@ export const data = {
                     await interaction.editReply({ embeds: [disableEmbed] });
                     disableEdited = true;
                 } catch {
-                    await delay(1000);
+                    await delay(1000, client);
                 }
             }
         }
 
         else if (subcommandGroup === 'owner') {
-            if (interaction.user.id !== guild.ownerId && !isBotOwner(interaction.user.id)) {
+            if (!isCommandAuthorized(guild, interaction.user.id, antinukeData, client, { requireOwnerOnly: true })) {
                 return await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
@@ -483,7 +517,7 @@ export const data = {
 
                         let description = "";
                         pageItems.forEach((id) => {
-                            const owner = client.users.cache.get(id);
+                            const owner = client.users?.cache?.get?.(id) || `<@${id}>`;
                             description += `${owner} (\`${id}\`)\n`;
                         });
 
@@ -614,13 +648,17 @@ export const data = {
                     const sentMessage = await interaction.editReply({ embeds: [embed], components: [actionRow, buttonRow] });
 
                     const collector = sentMessage.createMessageComponentCollector({ time: 60000 });
+                    let whitelistCompleted = false;
 
                     collector.on('collect', async (i) => {
-                        if (i.user.id !== interaction.user.id) {
-                            return i.reply({ content: 'You cannot interact with this.', flags: MessageFlags.Ephemeral });
-                        }
+                        const auth = await verifyCollectorInteraction(i, interaction.user.id, guild, client, {
+                            requireEnabled: true,
+                            collector
+                        });
+                        if (!auth.allowed) return;
 
                         if (i.customId === `whitelist_select_${user.id}`) {
+                            whitelistCompleted = true;
                             await i.reply({
                                 embeds: [
                                     new EmbedBuilder()
@@ -660,10 +698,11 @@ export const data = {
                                 components: []
                             });
 
-                            collector.stop();
+                            collector.stop('completed');
                         }
 
                         else if (i.customId === `whitelist_all_${user.id}`) {
+                            whitelistCompleted = true;
                             await i.reply({
                                 embeds: [
                                     new EmbedBuilder()
@@ -701,10 +740,15 @@ export const data = {
                                 components: []
                             });
 
-                            collector.stop();
+                            collector.stop('completed');
                         }
                     });
 
+                    collector.on('end', async () => {
+                        if (!whitelistCompleted) {
+                            await sentMessage.edit({ components: [] }).catch(() => null);
+                        }
+                    });
 
                     return;
                 }
@@ -885,6 +929,13 @@ export const data = {
                 })
             }
 
+            const protectStatus = await blueprintManager.syncProtectRoleIfStale(guild, client, antinukeData);
+            const roleDisplay = protectStatus.role
+                ? `<@&${protectStatus.role.id}>`
+                : antinukeData.protectRole
+                    ? `\`Missing / Stale (${antinukeData.protectRole})\` ${emojis.warn}`
+                    : '`Not Set`';
+
             const whitelistData = antinukeData?.whitelisted || {}
             const whitelistedCount = Object.entries(whitelistData)?.length || 0
             const extraOwnerCount = antinukeData?.extraOwners?.length || 0
@@ -892,7 +943,7 @@ export const data = {
             const embed = new EmbedBuilder()
                 .setDescription(
                     `__**${emojis.antinuke} Protection Details**__\n` +
-                    `> ${emojis.arrow} **Role:** <@&${antinukeData.protectRole}>\n` +
+                    `> ${emojis.arrow} **Role:** ${roleDisplay}\n` +
                     `> ${emojis.arrow} **Default Action:** \`${antinukeData.punishment?.toUpperCase()}\`\n` +
                     `> ${emojis.arrow} **Logging Channel:** ${antinukeData?.logsChannel ? `<#${antinukeData.logsChannel}>` : '`Not Set`'}\n` +
                     `> ${emojis.arrow} **Whitelist Users:** \`${whitelistedCount}\`\n` +
@@ -989,16 +1040,21 @@ export const data = {
             });
 
             const collector = replyMsg.createMessageComponentCollector({
-                filter: i => i.user.id === interaction.user.id,
                 time: 120000
             });
 
             collector.on('collect', async i => {
+                const auth = await verifyCollectorInteraction(i, interaction.user.id, guild, client, {
+                    requireEnabled: true,
+                    collector
+                });
+                if (!auth.allowed) return;
+
                 const selectedKey = i.values[0];
                 const targetMod = antinukeModules.find(m => m.key === selectedKey);
                 if (!targetMod) return i.deferUpdate();
 
-                const freshData = await antinukeDB.get(`antinukeData_${guild.id}`) || {};
+                const freshData = auth.antinukeData;
                 const disabledList = freshData.disabledEvents || [];
                 const isOff = disabledList.includes(selectedKey);
                 const updatedDisabled = isOff
@@ -1060,9 +1116,11 @@ export const data = {
                     let selectedAction;
                     collector.on('collect', async (i) => {
                         if (!i.isStringSelectMenu()) return;
-                        if (i.user.id !== interaction.user.id) {
-                            return i.reply({ content: 'You cannot interact with this.', flags: MessageFlags.Ephemeral });
-                        }
+                        const auth = await verifyCollectorInteraction(i, interaction.user.id, guild, client, {
+                            requireEnabled: true,
+                            collector
+                        });
+                        if (!auth.allowed) return;
                         const { customId, values, guild: iGuild } = i;
 
                         if (customId === 'select_action') {
@@ -1081,7 +1139,7 @@ export const data = {
                                     components: []
                                 });
 
-                                collector.stop();
+                                collector.stop('completed');
                             } catch (error) {
                                 console.error('Failed to set antinuke action:', error);
                                 await i.followUp({

@@ -43,6 +43,21 @@ manager.on('shardCreate', shard => {
     });
 });
 
+const shutdownShards = (signal) => {
+    console.log(`[Master Sharding] Received ${signal}. Stopping all shards cleanly...`);
+    manager.respawn = false;
+    for (const shard of manager.shards.values()) {
+        try {
+            shard.respawn = false;
+            shard.kill();
+        } catch {}
+    }
+    process.exit(0);
+};
+
+process.once('SIGINT', () => shutdownShards('SIGINT'));
+process.once('SIGTERM', () => shutdownShards('SIGTERM'));
+
 manager.spawn({ timeout: -1 }).catch(err => {
     console.error('[Master Sharding] Error during shard spawn:', err);
 });

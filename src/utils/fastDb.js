@@ -12,11 +12,28 @@ import fs from 'fs';
  * 4. Pre-compiled C++ Prepared Statements & Microtask Atomic Batch Transaction Coalescing
  */
 export class FastDB {
+    /** @type {Set<FastDB>} */
+    static instances = new Set();
+
     /**
-     * @param {string | { filePath?: string } | any} optionsOrInstance 
+     * Flush and close all active FastDB instances cleanly.
+     */
+    static closeAll() {
+        let closedCount = 0;
+        for (const instance of Array.from(FastDB.instances)) {
+            if (instance.close()) {
+                closedCount += 1;
+            }
+        }
+        return closedCount;
+    }
+
+    /**
+     * @param {string | { filePath?: string, cacheTtlMs?: number } | any} optionsOrInstance
      */
     constructor(optionsOrInstance = {}) {
         let filePath = 'json.sqlite';
+        let cacheTtlMs = 1000;
 
         if (typeof optionsOrInstance === 'string') {
             filePath = optionsOrInstance;
@@ -26,6 +43,9 @@ export class FastDB {
             } else if (optionsOrInstance.options?.filePath) {
                 filePath = optionsOrInstance.options.filePath;
             }
+            if (typeof optionsOrInstance.cacheTtlMs === 'number') {
+                cacheTtlMs = Math.max(0, optionsOrInstance.cacheTtlMs);
+            }
         }
 
         const dir = path.dirname(filePath);
@@ -34,10 +54,14 @@ export class FastDB {
         }
 
         this.filePath = filePath;
+        this.cacheTtlMs = cacheTtlMs;
         this.memory = new Map();
+        this.lastSyncedAt = new Map();
         this.dirtySet = new Map();
         this.deletedSet = new Set();
+        this.onWriteListeners = new Set();
         this.flushScheduled = false;
+        this.closed = false;
 
         // Initialize native C++ SQLite connection with extreme performance pragmas
         this.sqlite = new Database(filePath);
@@ -69,6 +93,29 @@ export class FastDB {
         // Synchronous 0ms pre-warm of all records into L1 RAM
         this._warmCacheSync();
         this.initialized = true;
+        FastDB.instances.add(this);
+    }
+
+    /**
+     * Register a listener notified whenever a root key is mutated or deleted.
+     * @param {(rootKey: string, rootValue: any, operation: 'set' | 'delete') => void} listener
+     * @returns {() => void} Unsubscribe function
+     */
+    onWrite(listener) {
+        if (typeof listener !== 'function') return () => {};
+        this.onWriteListeners.add(listener);
+        return () => this.onWriteListeners.delete(listener);
+    }
+
+    /**
+     * @private
+     */
+    _notifyWrite(rootKey, rootValue, operation) {
+        for (const listener of this.onWriteListeners) {
+            try {
+                listener(rootKey, rootValue, operation);
+            } catch {}
+        }
     }
 
     /**
@@ -77,6 +124,8 @@ export class FastDB {
      */
     _warmCacheSync() {
         try {
+            if (this.closed || !this.sqlite?.open) return;
+            const now = Date.now();
             const rows = this.stmtAll.all();
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
@@ -86,9 +135,49 @@ export class FastDB {
                     } catch {
                         this.memory.set(row.ID, row.json);
                     }
+                    this.lastSyncedAt.set(row.ID, now);
                 }
             }
         } catch {}
+    }
+
+    /**
+     * Refresh a single root key directly from SQLite when cross-shard TTL expires.
+     * Never overwrites uncommitted local dirty/deleted state.
+     * @param {string} rootKey
+     * @returns {any}
+     */
+    reloadKey(rootKey) {
+        if (!rootKey) return null;
+        if (this.dirtySet.has(rootKey)) {
+            return this.memory.get(rootKey) ?? null;
+        }
+        if (this.deletedSet.has(rootKey)) {
+            return null;
+        }
+        if (this.closed || !this.sqlite?.open) {
+            return this.memory.has(rootKey) ? this.memory.get(rootKey) : null;
+        }
+
+        try {
+            const row = this.stmtGet.get(rootKey);
+            const now = Date.now();
+            this.lastSyncedAt.set(rootKey, now);
+            if (!row || row.json === undefined) {
+                this.memory.delete(rootKey);
+                return null;
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(row.json);
+            } catch {
+                parsed = row.json;
+            }
+            this.memory.set(rootKey, parsed);
+            return parsed;
+        } catch {
+            return this.memory.has(rootKey) ? this.memory.get(rootKey) : null;
+        }
     }
 
     /**
@@ -99,32 +188,74 @@ export class FastDB {
     }
 
     /**
+     * Synchronously flush all pending dirty upserts and deletes to SQLite in one atomic transaction.
+     * @returns {boolean}
+     */
+    flushSync() {
+        this.flushScheduled = false;
+        if (this.closed || !this.sqlite?.open) return false;
+        if (this.dirtySet.size === 0 && this.deletedSet.size === 0) return true;
+
+        const upserts = [];
+        for (const [k, v] of this.dirtySet.entries()) {
+            try {
+                upserts.push([k, JSON.stringify(v)]);
+            } catch {}
+        }
+        const deletes = Array.from(this.deletedSet);
+
+        this.dirtySet.clear();
+        this.deletedSet.clear();
+
+        try {
+            this.flushTransaction(upserts, deletes);
+            const now = Date.now();
+            for (const [k] of upserts) {
+                this.lastSyncedAt.set(k, now);
+            }
+            for (const k of deletes) {
+                this.lastSyncedAt.set(k, now);
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Schedule an atomic microtask batch flush to SQLite WAL
      * @private
      */
     _scheduleFlush() {
-        if (this.flushScheduled) return;
+        if (this.flushScheduled || this.closed) return;
         this.flushScheduled = true;
 
         queueMicrotask(() => {
-            this.flushScheduled = false;
-            if (this.dirtySet.size === 0 && this.deletedSet.size === 0) return;
-
-            const upserts = [];
-            for (const [k, v] of this.dirtySet.entries()) {
-                try {
-                    upserts.push([k, JSON.stringify(v)]);
-                } catch {}
-            }
-            const deletes = Array.from(this.deletedSet);
-
-            this.dirtySet.clear();
-            this.deletedSet.clear();
-
-            try {
-                this.flushTransaction(upserts, deletes);
-            } catch {}
+            this.flushSync();
         });
+    }
+
+    /**
+     * Cleanly flush pending writes, checkpoint WAL, and close the SQLite connection.
+     * Idempotent and safe to call multiple times on SIGINT/SIGTERM.
+     * @returns {boolean}
+     */
+    close() {
+        FastDB.instances.delete(this);
+        if (this.closed || !this.sqlite) return false;
+        try {
+            this.flushSync();
+        } catch {}
+        try {
+            if (this.sqlite.open) {
+                try {
+                    this.sqlite.pragma('wal_checkpoint(TRUNCATE)');
+                } catch {}
+                this.sqlite.close();
+            }
+        } catch {}
+        this.closed = true;
+        return true;
     }
 
     /**
@@ -143,7 +274,7 @@ export class FastDB {
     }
 
     /**
-     * Sets a nested property path on an object
+     * Sets a nested property path on an object, cloning intermediate nodes to prevent shared-reference mutation
      * @private
      */
     _setNested(obj, pathParts, value) {
@@ -152,6 +283,10 @@ export class FastDB {
             const part = pathParts[i];
             if (current[part] === null || current[part] === undefined || typeof current[part] !== 'object') {
                 current[part] = {};
+            } else if (Array.isArray(current[part])) {
+                current[part] = [...current[part]];
+            } else {
+                current[part] = { ...current[part] };
             }
             current = current[part];
         }
@@ -159,7 +294,7 @@ export class FastDB {
     }
 
     /**
-     * Deletes a nested property path on an object
+     * Deletes a nested property path on an object, cloning intermediate nodes
      * @private
      */
     _deleteNested(obj, pathParts) {
@@ -169,6 +304,9 @@ export class FastDB {
             if (current === null || current === undefined || typeof current !== 'object') {
                 return;
             }
+            if (current[part] && typeof current[part] === 'object') {
+                current[part] = Array.isArray(current[part]) ? [...current[part]] : { ...current[part] };
+            }
             current = current[part];
         }
         if (current && typeof current === 'object') {
@@ -177,34 +315,53 @@ export class FastDB {
     }
 
     /**
-     * Synchronous 0.0001ms L1 RAM getter
-     * @param {string} key 
+     * Ensure rootKey in L1 RAM is fresh within cacheTtlMs across shards/connections
+     * @private
+     */
+    _ensureFreshRootSync(rootKey) {
+        if (!rootKey) return null;
+        if (this.dirtySet.has(rootKey)) {
+            return this.memory.get(rootKey) ?? null;
+        }
+        if (this.deletedSet.has(rootKey)) {
+            return null;
+        }
+        const lastSync = this.lastSyncedAt.get(rootKey);
+        if (lastSync === undefined || (Date.now() - lastSync) >= this.cacheTtlMs) {
+            return this.reloadKey(rootKey);
+        }
+        return this.memory.has(rootKey) ? this.memory.get(rootKey) : null;
+    }
+
+    /**
+     * Synchronous L1 RAM getter with bounded cross-shard SQLite freshness
+     * @param {string} key
      */
     getSync(key) {
         if (!key) return null;
         if (key.includes('.')) {
             const parts = key.split('.');
-            const rootVal = this.memory.get(parts[0]);
-            if (rootVal !== undefined) {
+            const rootVal = this._ensureFreshRootSync(parts[0]);
+            if (rootVal !== undefined && rootVal !== null) {
                 return this._getNested(rootVal, parts.slice(1));
             }
             return null;
         }
-        return this.memory.has(key) ? this.memory.get(key) : null;
+        return this._ensureFreshRootSync(key);
     }
 
     /**
      * 0ms L1 RAM retrieval
-     * @param {string} key 
+     * @param {string} key
      */
     async get(key) {
         return this.getSync(key);
     }
 
     /**
-     * Synchronous 0.0001ms L1 RAM setter + batched WAL persistence
-     * @param {string} key 
-     * @param {any} value 
+     * Synchronous L1 RAM setter + batched WAL persistence
+     * @param {string} key
+     * @param {any} value
      */
     setSync(key, value) {
         if (!key) return value;
@@ -215,7 +372,7 @@ export class FastDB {
         if (key.includes('.')) {
             const parts = key.split('.');
             rootKey = parts[0];
-            rootVal = this.memory.get(rootKey);
+            rootVal = this._ensureFreshRootSync(rootKey);
             if (rootVal === null || rootVal === undefined || typeof rootVal !== 'object') {
                 rootVal = {};
             } else if (typeof rootVal === 'object' && !Array.isArray(rootVal)) {
@@ -225,24 +382,28 @@ export class FastDB {
         }
 
         this.memory.set(rootKey, rootVal);
+        this.lastSyncedAt.set(rootKey, Date.now());
         this.deletedSet.delete(rootKey);
         this.dirtySet.set(rootKey, rootVal);
         this._scheduleFlush();
+        this._notifyWrite(rootKey, rootVal, 'set');
         return value;
     }
 
     /**
-     * 0ms L1 RAM setter with non-blocking batched WAL persistence
-     * @param {string} key 
-     * @param {any} value 
+     * L1 RAM setter with immediate WAL commit for cross-shard and restart durability
+     * @param {string} key
+     * @param {any} value
      */
     async set(key, value) {
-        return this.setSync(key, value);
+        const res = this.setSync(key, value);
+        this.flushSync();
+        return res;
     }
 
     /**
-     * 0ms L1 RAM delete with non-blocking batched WAL persistence
-     * @param {string} key 
+     * L1 RAM delete with immediate WAL commit
+     * @param {string} key
      */
     async delete(key) {
         if (!key) return false;
@@ -250,41 +411,47 @@ export class FastDB {
         if (key.includes('.')) {
             const parts = key.split('.');
             const rootKey = parts[0];
-            const rootVal = this.memory.get(rootKey);
+            const rootVal = this._ensureFreshRootSync(rootKey);
             if (rootVal && typeof rootVal === 'object') {
                 const cloned = { ...rootVal };
                 this._deleteNested(cloned, parts.slice(1));
                 this.memory.set(rootKey, cloned);
+                this.lastSyncedAt.set(rootKey, Date.now());
                 this.deletedSet.delete(rootKey);
                 this.dirtySet.set(rootKey, cloned);
-                this._scheduleFlush();
+                this.flushSync();
+                this._notifyWrite(rootKey, cloned, 'set');
             }
         } else {
             this.memory.delete(key);
+            this.lastSyncedAt.set(key, Date.now());
             this.dirtySet.delete(key);
             this.deletedSet.add(key);
-            this._scheduleFlush();
+            this.flushSync();
+            this._notifyWrite(key, null, 'delete');
         }
         return true;
     }
 
     /**
      * 0ms L1 RAM key existence check
-     * @param {string} key 
+     * @param {string} key
      */
     async has(key) {
         if (!key) return false;
         if (key.includes('.')) {
             return this.getSync(key) !== undefined;
         }
-        return this.memory.has(key);
+        return this.getSync(key) !== null;
     }
 
     /**
-     * 0ms L1 RAM retrieval of all table records
+     * Retrieval of all table records (syncing from SQLite if open)
      * @returns {Promise<Array<{ id: string, value: any }>>}
      */
     async all() {
+        this.flushSync();
+        this._warmCacheSync();
         const results = [];
         for (const [id, value] of this.memory.entries()) {
             results.push({ id, value });
@@ -294,8 +461,8 @@ export class FastDB {
 
     /**
      * 0ms L1 RAM array push
-     * @param {string} key 
-     * @param {any} value 
+     * @param {string} key
+     * @param {any} value
      */
     async push(key, value) {
         let current = this.getSync(key);
@@ -304,13 +471,14 @@ export class FastDB {
         }
         const next = [...current, value];
         this.setSync(key, next);
+        this.flushSync();
         return next;
     }
 
     /**
      * 0ms L1 RAM array pull
-     * @param {string} key 
-     * @param {any} value 
+     * @param {string} key
+     * @param {any} value
      */
     async pull(key, value) {
         const current = this.getSync(key);
@@ -319,30 +487,33 @@ export class FastDB {
         }
         const next = current.filter(item => item !== value);
         this.setSync(key, next);
+        this.flushSync();
         return next;
     }
 
     /**
      * 0ms L1 RAM numeric addition
-     * @param {string} key 
-     * @param {number} count 
+     * @param {string} key
+     * @param {number} count
      */
     async add(key, count) {
         const current = Number(this.getSync(key)) || 0;
         const next = current + Number(count);
         this.setSync(key, next);
+        this.flushSync();
         return next;
     }
 
     /**
      * 0ms L1 RAM numeric subtraction
-     * @param {string} key 
-     * @param {number} count 
+     * @param {string} key
+     * @param {number} count
      */
     async sub(key, count) {
         const current = Number(this.getSync(key)) || 0;
         const next = current - Number(count);
         this.setSync(key, next);
+        this.flushSync();
         return next;
     }
 }
