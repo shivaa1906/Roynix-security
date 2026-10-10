@@ -1,13 +1,13 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
 /**
- * Ultra-High-Performance Native C++ SQLite (WAL + Memory-Mapped I/O) + L1 RAM Database Engine
+ * Ultra-High-Performance Built-in Native C++ SQLite (node:sqlite WAL + Memory-Mapped I/O) + L1 RAM Database Engine
  *
  * Architecture:
  * 1. L1 In-Memory Map: 0.0001ms (sub-microsecond) reads & writes in V8 RAM
- * 2. Native C++ better-sqlite3 backend (zero QuickDB wrapper overhead, 100% schema-compatible with `json` table)
+ * 2. Built-in Node.js C++ node:sqlite DatabaseSync backend (zero external native addon ABI/GC crashes, 100% schema-compatible with `json` table)
  * 3. SQLite WAL Mode + 64MB Memory-Mapped I/O (mmap) + 16MB Page Cache + MEMORY temp_store
  * 4. Pre-compiled C++ Prepared Statements & Microtask Atomic Batch Transaction Coalescing
  */
@@ -16,9 +16,7 @@ export class FastDB {
     static instances = new Set();
 
     /**
-     * Pinned native C++ Database and Statement handles so V8 GC never invokes
-     * Statement::~Statement() -> node::RemoveEnvironmentCleanupHook(env == nullptr)
-     * during background garbage collection on Node.js 24+.
+     * Pinned native C++ Database and Statement handles.
      * @type {Array<any>}
      */
     static _pinnedNativeHandles = [];
@@ -71,11 +69,8 @@ export class FastDB {
         this.flushScheduled = false;
         this.closed = false;
 
-        // Initialize native C++ SQLite connection with extreme performance pragmas
-        // IMPORTANT: Use .exec('PRAGMA ...') instead of .pragma('...') so better-sqlite3
-        // executes via sqlite3_exec() directly without creating temporary Statement objects
-        // that trigger Statement::~Statement() RemoveEnvironmentCleanupHook assertions on Node 24+.
-        this.sqlite = new Database(filePath);
+        // Initialize built-in Node.js C++ SQLite connection with extreme performance pragmas
+        this.sqlite = new DatabaseSync(filePath);
         this.sqlite.exec(
             'PRAGMA journal_mode = WAL; ' +
             'PRAGMA synchronous = NORMAL; ' +
@@ -85,21 +80,33 @@ export class FastDB {
             'CREATE TABLE IF NOT EXISTS json (ID TEXT PRIMARY KEY, json TEXT);'
         );
 
-        // Pre-compile C++ prepared statements once and pin them against V8 GC finalization
+        // Pre-compile C++ prepared statements once
         this.stmtAll = this.sqlite.prepare('SELECT ID, json FROM json');
         this.stmtGet = this.sqlite.prepare('SELECT json FROM json WHERE ID = ?');
         this.stmtSet = this.sqlite.prepare('INSERT INTO json (ID, json) VALUES (?, ?) ON CONFLICT(ID) DO UPDATE SET json = excluded.json');
         this.stmtDelete = this.sqlite.prepare('DELETE FROM json WHERE ID = ?');
+        this.stmtBegin = this.sqlite.prepare('BEGIN IMMEDIATE');
+        this.stmtCommit = this.sqlite.prepare('COMMIT');
+        this.stmtRollback = this.sqlite.prepare('ROLLBACK');
 
         // Pre-compile atomic batch transaction
-        this.flushTransaction = this.sqlite.transaction((upserts, deletes) => {
-            for (const key of deletes) {
-                this.stmtDelete.run(key);
+        this.flushTransaction = (upserts, deletes) => {
+            this.stmtBegin.run();
+            try {
+                for (const key of deletes) {
+                    this.stmtDelete.run(key);
+                }
+                for (const [key, serialized] of upserts) {
+                    this.stmtSet.run(key, serialized);
+                }
+                this.stmtCommit.run();
+            } catch (err) {
+                try {
+                    this.stmtRollback.run();
+                } catch {}
+                throw err;
             }
-            for (const [key, serialized] of upserts) {
-                this.stmtSet.run(key, serialized);
-            }
-        });
+        };
 
         FastDB._pinnedNativeHandles.push(
             this.sqlite,
@@ -107,7 +114,9 @@ export class FastDB {
             this.stmtGet,
             this.stmtSet,
             this.stmtDelete,
-            this.flushTransaction
+            this.stmtBegin,
+            this.stmtCommit,
+            this.stmtRollback
         );
 
         // Synchronous 0ms pre-warm of all records into L1 RAM
@@ -144,7 +153,7 @@ export class FastDB {
      */
     _warmCacheSync() {
         try {
-            if (this.closed || !this.sqlite?.open) return;
+            if (this.closed || !this.sqlite) return;
             const now = Date.now();
             const rows = this.stmtAll.all();
             for (let i = 0; i < rows.length; i++) {
@@ -175,7 +184,7 @@ export class FastDB {
         if (this.deletedSet.has(rootKey)) {
             return null;
         }
-        if (this.closed || !this.sqlite?.open) {
+        if (this.closed || !this.sqlite) {
             return this.memory.has(rootKey) ? this.memory.get(rootKey) : null;
         }
 
@@ -213,7 +222,7 @@ export class FastDB {
      */
     flushSync() {
         this.flushScheduled = false;
-        if (this.closed || !this.sqlite?.open) return false;
+        if (this.closed || !this.sqlite) return false;
         if (this.dirtySet.size === 0 && this.deletedSet.size === 0) return true;
 
         const upserts = [];
@@ -267,12 +276,10 @@ export class FastDB {
             this.flushSync();
         } catch {}
         try {
-            if (this.sqlite.open) {
-                try {
-                    this.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-                } catch {}
-                this.sqlite.close();
-            }
+            try {
+                this.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            } catch {}
+            this.sqlite.close();
         } catch {}
         this.closed = true;
         return true;
