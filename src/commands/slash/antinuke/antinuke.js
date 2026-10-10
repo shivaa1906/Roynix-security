@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Embed, EmbedBuilder, MessageFlags, PermissionFlagsBits, StringSelectMenuBuilder, ChannelType, User } from 'discord.js'
 import emojis from '../../../config/emojis.js'
+import config from '../../../config/config.js'
 import { isBotOwner } from '../../../utils/isBotOwner.js'
 import { paginate } from '../../../utils/pagination.js'
 import { antinukeModules, findModule, renderEventsList } from '../../../utils/antinukeModules.js'
@@ -119,7 +120,7 @@ export const data = {
                 return await interaction.editReply({
                     embeds: [
                         new EmbedBuilder()
-                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                            .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                             .setDescription(`${emojis.warn} **Antinuke system is already enabled in this server.**\n\n`
                                 + `__**Current Status**__\n`
                                 + `${emojis.arrow} **State:** \`Enabled\` ${emojis.tick}\n`
@@ -132,7 +133,7 @@ export const data = {
             }
 
             const setupEmbed = new EmbedBuilder()
-                .setAuthor({ name: 'Roynix Antinuke Setup', iconURL: client.user.avatarURL({ size: 1024 }) })
+                .setAuthor({ name: 'Roynix Security Setup', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                 .setDescription(`${emojis.antinuke} **Initializing protection setup...**\n`
                     + `> ${emojis.loading} Checking required permissions & preparing protection role`)
                 .setColor(client.color)
@@ -264,7 +265,7 @@ export const data = {
                 return interaction.editReply({
                     embeds: [
                         new EmbedBuilder()
-                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                            .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                             .setDescription(`${emojis.warn} **Antinuke system is already disabled in this server.**\n\n`
                                 + `__**Current Status**__\n`
                                 + `${emojis.arrow} **State:** ${antinukeData?.enabled ? `\`Enabled\` ${emojis.tick}` : `\`Disabled\` ${emojis.cross}`}\n`
@@ -277,7 +278,7 @@ export const data = {
             }
 
             const disableEmbed = new EmbedBuilder()
-                .setAuthor({ name: 'Roynix Antinuke Setup', iconURL: client.user.avatarURL({ size: 1024 }) })
+                .setAuthor({ name: 'Roynix Security Setup', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                 .setDescription(`${emojis.antinuke} **Initializing full protection shutdown...**\n`
                     + `> ${emojis.loading} Checking required permissions`)
                 .setColor(client.color)
@@ -952,7 +953,8 @@ export const data = {
                     renderEventsList(antinukeData?.disabledEvents || []) +
                     `\n\n-# **Note:- Move my "Roynix Protect" role to the top of all roles for the best performance**`
                 ).setColor(client.color)
-                .setAuthor({ name: 'Roynix Antinuke System', iconURL: client.user.avatarURL({ size: 1024 }) })
+                .setAuthor({ name: 'Roynix Security System', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
+                    .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                 .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ size: 1024 }) })
                 .setThumbnail(guild.iconURL({ size: 1024 }))
 
@@ -1003,7 +1005,8 @@ export const data = {
 
             const buildMenu = (currentDisabled) => {
                 const embed = new EmbedBuilder()
-                    .setAuthor({ name: 'Roynix Antinuke Protection Modules', iconURL: client.user.avatarURL({ size: 1024 }) })
+                    .setAuthor({ name: 'Roynix Security Protection Modules', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
+                        .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                     .setDescription(
                         `Select a protection module from the dropdown below to toggle it **ON** or **OFF**.\n\n` +
                         `__**${emojis.gear} Current Module Status**__\n` +
@@ -1105,7 +1108,7 @@ export const data = {
 
                     const embed = new EmbedBuilder()
                         .setColor(client.color)
-                        .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                        .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                         .setTitle('Antinuke Action Configuration')
                         .setDescription(`${emojis.antinuke} **Choose the action that should be enforced when a security event is detected.**\n\n-# **Note:- Move my "Roynix Protect" role to the top of all roles for the best performance**`)
                         .setThumbnail(guild.iconURL({ size: 1024 }));
@@ -1132,7 +1135,7 @@ export const data = {
                                 await i.update({
                                     embeds: [
                                         new EmbedBuilder()
-                                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                            .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                             .setColor(client.color)
                                             .setDescription(`${emojis.tick} Antinuke action has been set to **${selectedAction}**`)
                                     ],
@@ -1171,7 +1174,7 @@ export const data = {
                     return interaction.reply({
                         embeds: [
                             new EmbedBuilder()
-                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                 .setDescription(`${emojis.antinuke} **Antinuke System punishment is currently set to ${action === 'kick' ? `\`Kick\` ${emojis.rmv}` : `\`Ban\` ${emojis.ban}`}**`)
                                 .setColor(client.color)
                         ]

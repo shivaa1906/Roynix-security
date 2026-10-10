@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Embed, EmbedBuilder, MessageFlags, PermissionFlagsBits, StringSelectMenuBuilder } from 'discord.js'
 import emojis from '../../../config/emojis.js'
+import config from '../../../config/config.js'
 import { isBotOwner } from '../../../utils/isBotOwner.js'
 import { isCommandAuthorized, verifyCollectorInteraction, positionAndAuditProtectRole } from '../../../utils/securityPolicy.js'
 import { blueprintManager } from '../../../utils/blueprintManager.js'
@@ -104,7 +105,7 @@ export const data = {
                     return message.reply({
                         embeds: [
                             new EmbedBuilder()
-                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                 .setDescription(`${emojis.warn} **Antinuke system is already enabled in this server.**\n\n`
                                     + `__**Current Status**__\n`
                                     + `${emojis.arrow} **State:** ${antinukeData?.enabled ? `\`Enabled\` ${emojis.tick}` : `\`Disabled\` ${emojis.cross}`}\n`
@@ -117,7 +118,7 @@ export const data = {
                 }
 
                 const setupEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'Roynix Antinuke Setup', iconURL: client.user.avatarURL({ size: 1024 }) })
+                    .setAuthor({ name: 'Roynix Security Setup', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                     .setDescription(`${emojis.antinuke} **Initializing protection setup...**\n`
                         + `> ${emojis.loading} Checking required permissions & preparing protection role`
                     )
@@ -285,7 +286,7 @@ export const data = {
                     return message.reply({
                         embeds: [
                             new EmbedBuilder()
-                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                 .setDescription(`${emojis.warn} **Antinuke system is already disabled in this server.**\n\n`
                                     + `__**Current Status**__\n`
                                     + `${emojis.arrow} **State:** ${antinukeData?.enabled ? `\`Enabled\` ${emojis.tick}` : `\`Disabled\` ${emojis.cross}`}\n`
@@ -298,7 +299,7 @@ export const data = {
                 }
 
                 const disableEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'Roynix Antinuke Setup', iconURL: client.user.avatarURL({ size: 1024 }) })
+                    .setAuthor({ name: 'Roynix Security Setup', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                     .setDescription(`${emojis.antinuke} **Initializing full protection shutdown...**\n`
                         + `> ${emojis.loading} Checking required permissions`
                     )
@@ -401,7 +402,7 @@ export const data = {
                     return message.reply({
                         embeds: [
                             new EmbedBuilder()
-                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                 .setDescription(
                                     `**Extra Owner Management**\n\n` +
                                     `- \`antinuke extraowner add <member>\`\n└  Adds a extraowner\n\n` +
@@ -601,7 +602,7 @@ export const data = {
                         return message.reply({
                             embeds: [
                                 new EmbedBuilder()
-                                    .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                    .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                     .setDescription(
                                         `**Extra Owner Management**\n\n` +
                                         `- \`antinuke extraowner add <member>\`\n└  Adds a extraowner\n\n` +
@@ -621,7 +622,7 @@ export const data = {
                     return message.reply({
                         embeds: [
                             new EmbedBuilder()
-                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                 .setDescription(
                                     `**Whitelist Management**\n\n` +
                                     `- \`antinuke whitelist add <member>\`\n└  Adds a whitelist user\n\n` +
@@ -969,7 +970,7 @@ export const data = {
                         return message.reply({
                             embeds: [
                                 new EmbedBuilder()
-                                    .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                    .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                     .setDescription(
                                         `**Whitelist Management**\n\n` +
                                         `- \`antinuke whitelist add <member>\`\n└  Adds a whitelist user\n\n` +
@@ -1067,7 +1068,8 @@ export const data = {
                         missingRoleWarning +
                         `\n\n-# **Note:- Move my "Roynix Protect" role to the top of all roles for the best performance**`
                     ).setColor(client.color)
-                    .setAuthor({ name: 'Roynix Antinuke System', iconURL: client.user.avatarURL({ size: 1024 }) })
+                    .setAuthor({ name: 'Roynix Security System', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
+                    .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                     .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.displayAvatarURL({ size: 1024 }) })
                     .setThumbnail(message.guild.iconURL({ size: 1024 }))
 
@@ -1122,7 +1124,8 @@ export const data = {
 
                 const buildMenu = (currentDisabled) => {
                     const embed = new EmbedBuilder()
-                        .setAuthor({ name: 'Roynix Antinuke Protection Modules', iconURL: client.user.avatarURL({ size: 1024 }) })
+                        .setAuthor({ name: 'Roynix Security Protection Modules', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
+                        .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                         .setDescription(
                             `Select a protection module from the dropdown below to toggle it **ON** or **OFF**.\n\n` +
                             `__**${emojis.gear} Current Module Status**__\n` +
@@ -1213,13 +1216,13 @@ export const data = {
 
                 if (!action) {
                     const embed = new EmbedBuilder()
-                        .setAuthor({ name: 'Roynix Antinuke Punishment', iconURL: client.user.avatarURL({ size: 1024 }) })
+                        .setAuthor({ name: 'Roynix Security Punishment', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                         .setDescription(
                             `- \`antinuke punishment set\`\n└  Sets the punishment of antinuke system\n\n` +
                             `- \`antinuke punishment show\`\n└  Show the current punishment of antinuke system`
                         )
                         .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.avatarURL({ size: 1024 }) })
-                        .setThumbnail(client.user.avatarURL({ size: 1024 }))
+                        .setThumbnail((config.avatar || client.user.displayAvatarURL({ size: 1024 })))
                         .setColor(client.color)
                     return message.reply({ embeds: [embed] })
                 }
@@ -1240,7 +1243,7 @@ export const data = {
 
                         const embed = new EmbedBuilder()
                             .setColor(client.color)
-                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                            .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                             .setTitle('Antinuke Action Configuration')
                             .setDescription(`${emojis.antinuke} **Choose the action that should be enforced when a security event is detected.**\n\n-# **Note:- Move my "Roynix Protect" role to the top of all roles for the best performance**`)
                             .setThumbnail(message.guild.iconURL({ size: 1024 }))
@@ -1266,7 +1269,7 @@ export const data = {
                                     await sentMessage.edit({
                                         embeds: [
                                             new EmbedBuilder()
-                                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                                 .setDescription(`${emojis.loading} **Configuring the antinuke punishment**`)
                                                 .setColor(client.color)
                                         ],
@@ -1278,7 +1281,7 @@ export const data = {
                                     await interaction.update({
                                         embeds: [
                                             new EmbedBuilder()
-                                                .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                                .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                                 .setColor(client.color)
                                                 .setDescription(`${emojis.tick} Antinuke action has been set to **${selectedAction}**`)
                                         ],
@@ -1316,7 +1319,7 @@ export const data = {
                         return message.reply({
                             embeds: [
                                 new EmbedBuilder()
-                                    .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                                    .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                                     .setDescription(`${emojis.antinuke} **Antinuke System punishment is currently set to ${action === 'kick' ? `\`Kick\` ${emojis.rmv}` : `\`Ban\` ${emojis.ban}`}**`)
                                     .setColor(client.color)
                             ]
@@ -1325,13 +1328,13 @@ export const data = {
 
                     default: {
                         const embed = new EmbedBuilder()
-                            .setAuthor({ name: 'Roynix Antinuke Punishment', iconURL: client.user.avatarURL({ size: 1024 }) })
+                            .setAuthor({ name: 'Roynix Security Punishment', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                             .setDescription(
                                 `- \`antinuke punishment set\`\n└  Sets the punishment of antinuke system\n\n` +
                                 `- \`antinuke punishment show\`\n└  Show the current punishment of antinuke system`
                             )
                             .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.avatarURL({ size: 1024 }) })
-                            .setThumbnail(client.user.avatarURL({ size: 1024 }))
+                            .setThumbnail((config.avatar || client.user.displayAvatarURL({ size: 1024 })))
                             .setColor(client.color)
                         return message.reply({ embeds: [embed] })
                     }
@@ -1342,7 +1345,7 @@ export const data = {
                 return message.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setAuthor({ name: 'Roynix Antinuke', iconURL: client.user.avatarURL({ size: 1024 }) })
+                            .setAuthor({ name: 'Roynix Security', iconURL: (config.avatar || client.user.displayAvatarURL({ size: 1024 })) })
                             .setDescription(
                                 `- \`antinuke enable\`\n└  Enable the antinuke system\n\n` +
                                 `- \`antinuke disable\`\n└  Disable the antinuke system\n\n` +
@@ -1353,7 +1356,7 @@ export const data = {
                                 `- \`antinuke config\`\n└  View current antinuke settings`
                             )
                             .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.avatarURL({ size: 1024 }) })
-                            .setThumbnail(client.user.avatarURL({ size: 1024 }))
+                            .setThumbnail((config.avatar || client.user.displayAvatarURL({ size: 1024 })))
                             .setColor(client.color)
                     ]
                 })

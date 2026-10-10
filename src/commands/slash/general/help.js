@@ -12,7 +12,7 @@ import config from "../../../config/config.js";
 export const data = {
     data: new SlashCommandBuilder()
         .setName("help")
-        .setDescription("Launch the Roynix Shield Help Menu")
+        .setDescription("Launch the Roynix Security Help Menu")
         .addStringOption(option =>
             option
                 .setName("command")
@@ -30,11 +30,13 @@ export const data = {
         if (query) {
             const cmd = client.prefix.get(query.toLowerCase());
             if (cmd) {
+                const botAvatar = config.avatar || client.user.displayAvatarURL({ size: 1024 });
+                const botBanner = config.banner || client.user.bannerURL({ size: 1024 }) || null;
                 const cmdEmbed = new EmbedBuilder()
-                    .setColor(client.color || 0x2b2d31)
+                    .setColor(client.color || 0x0a0a0c)
                     .setAuthor({
                         name: `${client.user.username} - Command Info`,
-                        iconURL: client.user.displayAvatarURL({ size: 1024 }),
+                        iconURL: botAvatar,
                     })
                     .setTitle(`Command: ${cmd.name}`)
                     .setDescription(
@@ -42,8 +44,10 @@ export const data = {
                         `**Usage:** \`${prefix}${cmd.name}${cmd.args ? ' ' + cmd.args.map(a => `<${a.name}>`).join(' ') : ''}\`\n` +
                         `**Aliases:** ${cmd.aliases && cmd.aliases.length > 0 ? cmd.aliases.map(a => `\`${a}\``).join(', ') : '*None*'}`
                     )
+                    .setThumbnail(botAvatar)
+                    .setImage(botBanner)
                     .setFooter({
-                        text: `Roynix Shield • Requested by ${interaction.user.tag}`,
+                        text: `Roynix Security • Requested by ${interaction.user.tag}`,
                         iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
                     })
                     .setTimestamp();
@@ -139,17 +143,20 @@ export const data = {
                     { cmd: "logging <set|remove|show>", desc: "Configure audit logging channels" },
                     { cmd: "afk [reason]", desc: "Set AFK status with automated auto-reply" },
                     { cmd: "invite", desc: "Get bot invite authorization link" },
-                    { cmd: "support", desc: "Get Roynix Shield support server link" },
+                    { cmd: "support", desc: "Get Roynix Security support server link" },
                 ]
             }
         };
 
+        const botAvatar = config.avatar || client.user.displayAvatarURL({ size: 1024 });
+        const botBanner = config.banner || client.user.bannerURL({ size: 1024 }) || null;
+
         const buildMainframeEmbed = () => {
             return new EmbedBuilder()
-                .setColor(client.color || 0x2b2d31)
+                .setColor(client.color || 0x0a0a0c)
                 .setAuthor({
                     name: `${client.user.username} - Help Menu`,
-                    iconURL: client.user.displayAvatarURL({ size: 1024 }),
+                    iconURL: botAvatar,
                 })
                 .setDescription(
                     `> **${client.user.username}** — Advanced multi-purpose Discord security, antinuke & server moderation bot.\n\n` +
@@ -161,8 +168,8 @@ export const data = {
                     `\`\`\`\n` +
                     `*- Select a category from the dropdown menu below to view its commands.*`
                 )
-                .setThumbnail(client.user.displayAvatarURL({ size: 1024 }))
-                .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
+                .setThumbnail(botAvatar)
+                .setImage(botBanner)
                 .setFooter({
                     text: `${client.user.username} • Requested by ${interaction.user.tag}`,
                     iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
@@ -177,13 +184,14 @@ export const data = {
             const cmdList = sys.commands.map(item => `\`${prefix}${item.cmd}\` - ${item.desc}`).join("\n");
 
             return new EmbedBuilder()
-                .setColor(client.color || 0x2b2d31)
+                .setColor(client.color || 0x0a0a0c)
                 .setAuthor({
                     name: `${client.user.username} - ${sys.title}`,
-                    iconURL: client.user.displayAvatarURL({ size: 1024 }),
+                    iconURL: botAvatar,
                 })
                 .setDescription(cmdList)
-                .setThumbnail(client.user.displayAvatarURL({ size: 1024 }))
+                .setThumbnail(botAvatar)
+                .setImage(botBanner)
                 .setFooter({
                     text: `${client.user.username} • ${sys.commands.length} Commands • Requested by ${interaction.user.tag}`,
                     iconURL: interaction.user.displayAvatarURL({ dynamic: true }),
@@ -244,7 +252,7 @@ export const data = {
                 .setLabel("Support")
                 .setStyle(ButtonStyle.Link)
                 .setEmoji("🌐")
-                .setURL(config.links.supportServer || "https://discord.gg/"),
+                .setURL(config.links.supportServer || "https://discord.gg/XA4VZMYsbP"),
             new ButtonBuilder()
                 .setLabel("Invite")
                 .setStyle(ButtonStyle.Link)

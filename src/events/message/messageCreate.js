@@ -50,13 +50,15 @@ export const data = {
         const hasNoprefix = isEnabled && (npData.plan === 'Lifetime' || !isExpired);
 
         if ([`<@${client.user.id}>`, `<@!${client.user.id}>`].includes(message.content.trim())) {
+            const botAvatar = config.avatar || client.user.displayAvatarURL({ size: 1024 });
+            const botBanner = config.banner || client.user.bannerURL({ size: 1024 }) || null;
             const embed = new EmbedBuilder()
                 .setColor(client.color)
-                .setAuthor({ name: client.user.tag, iconURL: client.user.avatarURL({ size: 1024 }) })
+                .setAuthor({ name: client.user.tag, iconURL: botAvatar })
                 .setDescription(`${emojis.slash} **My prefix is** \`${guildPrefix}\`\n${emojis.info} **Use** \`${guildPrefix}help\` **to see all my commands!**`)
-                .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
+                .setImage(botBanner)
                 .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
-                .setThumbnail(client.user.avatarURL({ size: 1024 }));
+                .setThumbnail(botAvatar);
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
