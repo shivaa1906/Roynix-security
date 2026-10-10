@@ -16,6 +16,14 @@ export class FastDB {
     static instances = new Set();
 
     /**
+     * Pinned native C++ Database and Statement handles so V8 GC never invokes
+     * Statement::~Statement() -> node::RemoveEnvironmentCleanupHook(env == nullptr)
+     * during background garbage collection on Node.js 24+.
+     * @type {Array<any>}
+     */
+    static _pinnedNativeHandles = [];
+
+    /**
      * Flush and close all active FastDB instances cleanly.
      */
     static closeAll() {
@@ -64,17 +72,20 @@ export class FastDB {
         this.closed = false;
 
         // Initialize native C++ SQLite connection with extreme performance pragmas
+        // IMPORTANT: Use .exec('PRAGMA ...') instead of .pragma('...') so better-sqlite3
+        // executes via sqlite3_exec() directly without creating temporary Statement objects
+        // that trigger Statement::~Statement() RemoveEnvironmentCleanupHook assertions on Node 24+.
         this.sqlite = new Database(filePath);
-        this.sqlite.pragma('journal_mode = WAL');
-        this.sqlite.pragma('synchronous = NORMAL');
-        this.sqlite.pragma('temp_store = MEMORY');
-        this.sqlite.pragma('mmap_size = 67108864'); // 64MB Memory-Mapped I/O
-        this.sqlite.pragma('cache_size = -16000');  // 16MB RAM Page Cache
+        this.sqlite.exec(
+            'PRAGMA journal_mode = WAL; ' +
+            'PRAGMA synchronous = NORMAL; ' +
+            'PRAGMA temp_store = MEMORY; ' +
+            'PRAGMA mmap_size = 67108864; ' +
+            'PRAGMA cache_size = -16000; ' +
+            'CREATE TABLE IF NOT EXISTS json (ID TEXT PRIMARY KEY, json TEXT);'
+        );
 
-        // Ensure 100% QuickDB table compatibility
-        this.sqlite.exec('CREATE TABLE IF NOT EXISTS json (ID TEXT PRIMARY KEY, json TEXT)');
-
-        // Pre-compile C++ prepared statements once
+        // Pre-compile C++ prepared statements once and pin them against V8 GC finalization
         this.stmtAll = this.sqlite.prepare('SELECT ID, json FROM json');
         this.stmtGet = this.sqlite.prepare('SELECT json FROM json WHERE ID = ?');
         this.stmtSet = this.sqlite.prepare('INSERT INTO json (ID, json) VALUES (?, ?) ON CONFLICT(ID) DO UPDATE SET json = excluded.json');
@@ -89,6 +100,15 @@ export class FastDB {
                 this.stmtSet.run(key, serialized);
             }
         });
+
+        FastDB._pinnedNativeHandles.push(
+            this.sqlite,
+            this.stmtAll,
+            this.stmtGet,
+            this.stmtSet,
+            this.stmtDelete,
+            this.flushTransaction
+        );
 
         // Synchronous 0ms pre-warm of all records into L1 RAM
         this._warmCacheSync();
@@ -249,7 +269,7 @@ export class FastDB {
         try {
             if (this.sqlite.open) {
                 try {
-                    this.sqlite.pragma('wal_checkpoint(TRUNCATE)');
+                    this.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
                 } catch {}
                 this.sqlite.close();
             }
