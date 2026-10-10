@@ -104,7 +104,6 @@ export const data = {
                         `> **Emojis**: \`${emojiCount}\``
                     ].join('\n'))
                     .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                     .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
                     .setColor(client.color),
 
@@ -124,7 +123,6 @@ export const data = {
                         `> **Heap Used**: \`${(memoryUsage.heapUsed / 1024 / 1024).toFixed(2)}MB\``
                     ].join('\n'))
                     .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
                     .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
                     .setColor(client.color),
 
@@ -138,7 +136,6 @@ export const data = {
                     .setColor(client.color)
                     .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
                     .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
             };
 
             const getNavRow = (active) => new ActionRowBuilder().addComponents(

@@ -99,7 +99,6 @@ import config from '../../../config/config.js';
               `> **Emojis**: \`${emojiCount}\``
             ].join('\n'))
             .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
             .setFooter({ text: `Requested by ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
             .setColor(client.color),
   
@@ -119,7 +118,6 @@ import config from '../../../config/config.js';
               `> **Heap Used**: \`${(memoryUsage.heapUsed / 1024 / 1024).toFixed(2)}MB\``
             ].join('\n'))
             .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
             .setFooter({ text: `Requested by ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
             .setColor(client.color),
   
@@ -133,7 +131,6 @@ import config from '../../../config/config.js';
             .setColor(client.color)
             .setFooter({ text: `Requested by ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
             .setThumbnail(config.avatar || client.user.displayAvatarURL({ size: 1024 }))
-            .setImage(config.banner || client.user.bannerURL({ size: 1024 }) || null)
         };
   
         const getNavRow = (active) => new ActionRowBuilder().addComponents(
