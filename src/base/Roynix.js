@@ -1,5 +1,4 @@
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, AuditLogEvent, Routes } from "discord.js";
-import { QuickDB } from "quick.db";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -103,29 +102,29 @@ class Roynix extends Client {
             fs.mkdirSync(databasePath, { recursive: true });
         }
 
-        this.noprefixDB = new FastDB(new QuickDB({ filePath: path.join(databasePath, "noprefix.db") }));
-        this.prefixDB = new FastDB(new QuickDB({ filePath: path.join(databasePath, "prefix.db") }));
-        this.tosDB = new QuickDB({ filePath: path.join(databasePath, "tos.db") });
-        this.errorDB = new QuickDB({ filePath: path.join(databasePath, "error.db") });
-        this.antinukeDB = new FastDB(new QuickDB({ filePath: path.join(databasePath, "antinuke.db") }));
-        this.badgeDB = new QuickDB({ filePath: path.join(databasePath, 'badge.db') })
-        this.premiumDB = new QuickDB({ filePath: path.join(databasePath, 'premium.db') })
-        this.premiumGuildDB = new QuickDB({ filePath: path.join(databasePath, 'premiumGuild.db') })
-        this.userDB = new QuickDB({ filePath: path.join(databasePath, 'user.db') })
-        this.automodDB = new QuickDB({ filePath: path.join(databasePath, 'automod.db') })
-        this.ticketDB = new QuickDB({ filePath: path.join(databasePath, 'ticket.db') })
-        this.autoreactDB = new QuickDB({ filePath: path.join(databasePath, 'autoreact.db') })
-        this.loggingDB = new QuickDB({ filePath: path.join(databasePath, 'logging.db') })
-        this.welcomeDB = new QuickDB({ filePath: path.join(databasePath, 'welcome.db') })
-        this.j2cDB = new QuickDB({ filePath: path.join(databasePath, 'j2c.db') })
-        this.activeVcDB = new QuickDB({ filePath: path.join(databasePath, 'activevc.db') })
-        this.giveawayDB = new QuickDB({ filePath: path.join(databasePath, 'giveaway.db') })
-        this.ignoreDB = new QuickDB({ filePath: path.join(databasePath, 'ignore.db') })
-        this.afkDB = new QuickDB({ filePath: path.join(databasePath, 'afk.db') })
-        this.mediaDB = new QuickDB({ filePath: path.join(databasePath, 'media.db') })
-        this.autoroleDB = new QuickDB({ filePath: path.join(databasePath, 'autorole.db') })
-        this.autoresponderDB = new QuickDB({ filePath: path.join(databasePath, 'autoresponder.db') })
-        this.activityroleDB = new QuickDB({ filePath: path.join(databasePath, 'activityrole.db') })
+        this.noprefixDB = new FastDB(path.join(databasePath, "noprefix.db"));
+        this.prefixDB = new FastDB(path.join(databasePath, "prefix.db"));
+        this.tosDB = new FastDB(path.join(databasePath, "tos.db"));
+        this.errorDB = new FastDB(path.join(databasePath, "error.db"));
+        this.antinukeDB = new FastDB(path.join(databasePath, "antinuke.db"));
+        this.badgeDB = new FastDB(path.join(databasePath, 'badge.db'));
+        this.premiumDB = new FastDB(path.join(databasePath, 'premium.db'));
+        this.premiumGuildDB = new FastDB(path.join(databasePath, 'premiumGuild.db'));
+        this.userDB = new FastDB(path.join(databasePath, 'user.db'));
+        this.automodDB = new FastDB(path.join(databasePath, 'automod.db'));
+        this.ticketDB = new FastDB(path.join(databasePath, 'ticket.db'));
+        this.autoreactDB = new FastDB(path.join(databasePath, 'autoreact.db'));
+        this.loggingDB = new FastDB(path.join(databasePath, 'logging.db'));
+        this.welcomeDB = new FastDB(path.join(databasePath, 'welcome.db'));
+        this.j2cDB = new FastDB(path.join(databasePath, 'j2c.db'));
+        this.activeVcDB = new FastDB(path.join(databasePath, 'activevc.db'));
+        this.giveawayDB = new FastDB(path.join(databasePath, 'giveaway.db'));
+        this.ignoreDB = new FastDB(path.join(databasePath, 'ignore.db'));
+        this.afkDB = new FastDB(path.join(databasePath, 'afk.db'));
+        this.mediaDB = new FastDB(path.join(databasePath, 'media.db'));
+        this.autoroleDB = new FastDB(path.join(databasePath, 'autorole.db'));
+        this.autoresponderDB = new FastDB(path.join(databasePath, 'autoresponder.db'));
+        this.activityroleDB = new FastDB(path.join(databasePath, 'activityrole.db'));
 
         // Ultra-low latency in-memory caches
         this.antinukeCache = new Map();
