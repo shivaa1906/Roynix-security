@@ -24,8 +24,8 @@ const config = {
     developers: process.env.DEVELOPERS ? process.env.DEVELOPERS.split(',').map(id => id.trim()) : [
         '788970167907778562'
     ],
-    avatar: "https://cdn.discordapp.com/avatars/1370720264605925547/a_0f3ea602866a3082c0431fe23a6f6dea.gif?size=1024",
-    banner: "https://cdn.discordapp.com/banners/1370720264605925547/a_146664249e75123872ad42c193edddb1.gif?size=1024",
+    avatar: "https://cdn.discordapp.com/avatars/1558715279528165476/a_474949642653fe1b699d1238e1e334e4.gif?size=1024",
+    banner: "https://cdn.discordapp.com/banners/1558715279528165476/a_350a7e514e06cb36ffef4c39635f5518.gif?size=1024",
     links: {
         supportServer: "https://discord.gg/XA4VZMYsbP",
     },
