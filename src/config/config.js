@@ -30,7 +30,7 @@ const config = {
         supportServer: "https://discord.gg/XA4VZMYsbP",
     },
     webhooks: {
-        error: process.env.ERROR_WEBHOOK_URL || "https://discordapp.com/api/webhooks/1406246759230869605/Hq81yIfQr3ApFOu77ZszhGxc9M3wTqB_lhoopS0p8a8x8-mu_3X7aO4e66aDrFyh6hrI",
+        error: process.env.ERROR_WEBHOOK_URL || "",
     }
 };
 
