@@ -22,7 +22,7 @@ export function formatAndRedactError(err) {
     } else {
         raw = String(err);
     }
-    const extraSecrets = [config?.token, config?.webhooks?.error, config?.lavalink?.auth].filter(Boolean);
+    const extraSecrets = [config?.token, config?.webhooks?.error].filter(Boolean);
     return redactSecrets(raw, extraSecrets);
 }
 

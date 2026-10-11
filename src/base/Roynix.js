@@ -71,14 +71,6 @@ class Roynix extends Client {
             },
         });
 
-        const Nodes = [
-            {
-                name: config.lavalink?.name || 'Roynix',
-                url: config.lavalink?.url || 'new-york-node-1.vortexcloud.xyz:5002',
-                auth: config.lavalink?.auth || 'Npgontop',
-                secure: config.lavalink?.secure || false
-            },
-        ];
 
 
         this.config = config;

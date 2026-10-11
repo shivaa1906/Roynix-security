@@ -31,16 +31,6 @@ const config = {
     },
     webhooks: {
         error: process.env.ERROR_WEBHOOK_URL || "https://discordapp.com/api/webhooks/1406246759230869605/Hq81yIfQr3ApFOu77ZszhGxc9M3wTqB_lhoopS0p8a8x8-mu_3X7aO4e66aDrFyh6hrI",
-    },
-    spotify: {
-        id: process.env.SPOTIFY_CLIENT_ID || '55bcd0f038b849bd866ddf7319c5d637',
-        secret: process.env.SPOTIFY_CLIENT_SECRET || 'd461a94b021748d2baa8a84733c024a0'
-    },
-    lavalink: {
-        name: process.env.LAVALINK_NAME || 'Roynix',
-        url: process.env.LAVALINK_URL || 'new-york-node-1.vortexcloud.xyz:5002',
-        auth: process.env.LAVALINK_AUTH || 'Npgontop',
-        secure: process.env.LAVALINK_SECURE === 'true'
     }
 };
 
