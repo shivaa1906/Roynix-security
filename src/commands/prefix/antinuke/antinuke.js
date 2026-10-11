@@ -1135,11 +1135,11 @@ export const data = {
                         .setThumbnail(guild.iconURL({ size: 1024 }))
                         .setFooter({ text: `Requested by ${message.author.username}`, iconURL: message.author.displayAvatarURL() });
 
-                    const selectMenu = new StringSelectMenuBuilder()
-                        .setCustomId('antinuke_module_toggle_menu')
-                        .setPlaceholder('Select a module to toggle...')
+                    const menu1 = new StringSelectMenuBuilder()
+                        .setCustomId('antinuke_module_toggle_menu_1')
+                        .setPlaceholder('Core Protections (1 - 20)...')
                         .addOptions(
-                            antinukeModules.map(mod => {
+                            antinukeModules.slice(0, 20).map(mod => {
                                 const isEnabled = !currentDisabled.includes(mod.key);
                                 return {
                                     label: mod.name,
@@ -1150,15 +1150,31 @@ export const data = {
                             })
                         );
 
-                    const row = new ActionRowBuilder().addComponents(selectMenu);
-                    return { embed, row };
+                    const menu2 = new StringSelectMenuBuilder()
+                        .setCustomId('antinuke_module_toggle_menu_2')
+                        .setPlaceholder('Advanced Protections (21 - 37)...')
+                        .addOptions(
+                            antinukeModules.slice(20).map(mod => {
+                                const isEnabled = !currentDisabled.includes(mod.key);
+                                return {
+                                    label: mod.name,
+                                    value: mod.key,
+                                    description: (isEnabled ? '[ENABLED] ' : '[DISABLED] ') + mod.description.slice(0, 80),
+                                    emoji: isEnabled ? '🟢' : '⚪'
+                                };
+                            })
+                        );
+
+                    const row1 = new ActionRowBuilder().addComponents(menu1);
+                    const row2 = new ActionRowBuilder().addComponents(menu2);
+                    return { embed, components: [row1, row2] };
                 };
 
                 let currentDisabled = antinukeData.disabledEvents || [];
                 const initial = buildMenu(currentDisabled);
                 const replyMsg = await message.reply({
                     embeds: [initial.embed],
-                    components: [initial.row]
+                    components: initial.components
                 });
 
                 const collector = replyMsg.createMessageComponentCollector({
@@ -1189,15 +1205,17 @@ export const data = {
                     const updated = buildMenu(currentDisabled);
                     await i.update({
                         embeds: [updated.embed],
-                        components: [updated.row]
+                        components: updated.components
                     });
                 });
 
                 collector.on('end', async () => {
-                    const disabledRow = new ActionRowBuilder().addComponents(
-                        StringSelectMenuBuilder.from(initial.row.components[0]).setDisabled(true)
+                    const disabledRows = initial.components.map(row =>
+                        new ActionRowBuilder().addComponents(
+                            StringSelectMenuBuilder.from(row.components[0]).setDisabled(true)
+                        )
                     );
-                    await replyMsg.edit({ components: [disabledRow] }).catch(() => null);
+                    await replyMsg.edit({ components: disabledRows }).catch(() => null);
                 });
 
                 break;

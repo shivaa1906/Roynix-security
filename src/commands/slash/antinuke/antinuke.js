@@ -1016,71 +1016,89 @@ export const data = {
                     .setThumbnail(guild.iconURL({ size: 1024 }))
                     .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
 
-                const selectMenu = new StringSelectMenuBuilder()
-                    .setCustomId('antinuke_slash_module_toggle_menu')
-                    .setPlaceholder('Select a module to toggle...')
-                    .addOptions(
-                        antinukeModules.map(mod => {
-                            const isEnabled = !currentDisabled.includes(mod.key);
-                            return {
-                                label: mod.name,
-                                value: mod.key,
-                                description: (isEnabled ? '[ENABLED] ' : '[DISABLED] ') + mod.description.slice(0, 80),
-                                emoji: isEnabled ? '🟢' : '⚪'
-                            };
-                        })
+                    const menu1 = new StringSelectMenuBuilder()
+                        .setCustomId('antinuke_slash_module_toggle_menu_1')
+                        .setPlaceholder('Core Protections (1 - 20)...')
+                        .addOptions(
+                            antinukeModules.slice(0, 20).map(mod => {
+                                const isEnabled = !currentDisabled.includes(mod.key);
+                                return {
+                                    label: mod.name,
+                                    value: mod.key,
+                                    description: (isEnabled ? '[ENABLED] ' : '[DISABLED] ') + mod.description.slice(0, 80),
+                                    emoji: isEnabled ? '🟢' : '⚪'
+                                };
+                            })
+                        );
+
+                    const menu2 = new StringSelectMenuBuilder()
+                        .setCustomId('antinuke_slash_module_toggle_menu_2')
+                        .setPlaceholder('Advanced Protections (21 - 37)...')
+                        .addOptions(
+                            antinukeModules.slice(20).map(mod => {
+                                const isEnabled = !currentDisabled.includes(mod.key);
+                                return {
+                                    label: mod.name,
+                                    value: mod.key,
+                                    description: (isEnabled ? '[ENABLED] ' : '[DISABLED] ') + mod.description.slice(0, 80),
+                                    emoji: isEnabled ? '🟢' : '⚪'
+                                };
+                            })
+                        );
+
+                    const row1 = new ActionRowBuilder().addComponents(menu1);
+                    const row2 = new ActionRowBuilder().addComponents(menu2);
+                    return { embed, components: [row1, row2] };
+                };
+
+                let currentDisabled = antinukeData.disabledEvents || [];
+                const initial = buildMenu(currentDisabled);
+                const replyMsg = await interaction.editReply({
+                    embeds: [initial.embed],
+                    components: initial.components
+                });
+
+                const collector = replyMsg.createMessageComponentCollector({
+                    time: 120000
+                });
+
+                collector.on('collect', async i => {
+                    const auth = await verifyCollectorInteraction(i, interaction.user.id, guild, client, {
+                        requireEnabled: true,
+                        collector
+                    });
+                    if (!auth.allowed) return;
+
+                    const selectedKey = i.values[0];
+                    const targetMod = antinukeModules.find(m => m.key === selectedKey);
+                    if (!targetMod) return i.deferUpdate();
+
+                    const freshData = auth.antinukeData;
+                    const disabledList = freshData.disabledEvents || [];
+                    const isOff = disabledList.includes(selectedKey);
+                    const updatedDisabled = isOff
+                        ? disabledList.filter(k => k !== selectedKey)
+                        : [...disabledList, selectedKey];
+
+                    await antinukeDB.set(`antinukeData_${guild.id}.disabledEvents`, updatedDisabled);
+                    currentDisabled = updatedDisabled;
+
+                    const updated = buildMenu(currentDisabled);
+                    await i.update({
+                        embeds: [updated.embed],
+                        components: updated.components
+                    });
+                });
+
+                collector.on('end', async () => {
+                    const disabledRows = initial.components.map(row =>
+                        new ActionRowBuilder().addComponents(
+                            StringSelectMenuBuilder.from(row.components[0]).setDisabled(true)
+                        )
                     );
-
-                const row = new ActionRowBuilder().addComponents(selectMenu);
-                return { embed, row };
-            };
-
-            let currentDisabled = antinukeData.disabledEvents || [];
-            const initial = buildMenu(currentDisabled);
-            const replyMsg = await interaction.editReply({
-                embeds: [initial.embed],
-                components: [initial.row]
-            });
-
-            const collector = replyMsg.createMessageComponentCollector({
-                time: 120000
-            });
-
-            collector.on('collect', async i => {
-                const auth = await verifyCollectorInteraction(i, interaction.user.id, guild, client, {
-                    requireEnabled: true,
-                    collector
+                    await interaction.editReply({ components: disabledRows }).catch(() => null);
                 });
-                if (!auth.allowed) return;
-
-                const selectedKey = i.values[0];
-                const targetMod = antinukeModules.find(m => m.key === selectedKey);
-                if (!targetMod) return i.deferUpdate();
-
-                const freshData = auth.antinukeData;
-                const disabledList = freshData.disabledEvents || [];
-                const isOff = disabledList.includes(selectedKey);
-                const updatedDisabled = isOff
-                    ? disabledList.filter(k => k !== selectedKey)
-                    : [...disabledList, selectedKey];
-
-                await antinukeDB.set(`antinukeData_${guild.id}.disabledEvents`, updatedDisabled);
-                currentDisabled = updatedDisabled;
-
-                const updated = buildMenu(currentDisabled);
-                await i.update({
-                    embeds: [updated.embed],
-                    components: [updated.row]
-                });
-            });
-
-            collector.on('end', async () => {
-                const disabledRow = new ActionRowBuilder().addComponents(
-                    StringSelectMenuBuilder.from(initial.row.components[0]).setDisabled(true)
-                );
-                await interaction.editReply({ components: [disabledRow] }).catch(() => null);
-            });
-            return;
+                return;
         } else if (subcommandGroup === 'punishment') {
             if (!antinukeData?.enabled) {
                 return interaction.reply({
